@@ -1,0 +1,25 @@
+modules:
+  jira:issuePanel:
+    - key: my-first-forge-app-v1-hello-world-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: "Hieumt-nice-issue-panel"
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      viewportSize: medium
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/672fa62c-2618-4757-abc2-bfccf8d49271
+permissions:
+  scopes:
+    - read:jira-work # Scope này cho phép gọi GET /rest/api/3/issue/{issueKey}
