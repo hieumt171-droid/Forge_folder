@@ -1,0 +1,30 @@
+modules:
+  jira:issueContext:
+    - key: hieumt-first-issue-context-risk-score
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Risk Score
+      description: Issue Risk Score based on Jira priority.
+      label: Risk Score
+      # status: lozenge
+      dynamicProperties:
+        function: dynamicProperties
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: dynamicProperties
+      handler: dynamic-properties.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/4e83b140-9253-415e-acb0-587c0c6c618a
+permissions:
+  scopes:
+    - read:jira-work # Scope này cho phép gọi GET /rest/api/3/issue/{issueKey}
