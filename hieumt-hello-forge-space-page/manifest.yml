@@ -1,0 +1,21 @@
+modules:
+  confluence:spacePage:
+    - key: hieumt-hello-forge-space-page-hello-world-space-page
+      resource: main
+      render: native
+      title: hieumt-hello-forge-space-page
+      route: hello-world
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:confluence-space.summary
+    - read:space:confluence    # Đọc thông tin space
+    - read:page:confluence     # Đọc Confluence pages
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/f7b9ac63-b37e-4993-8d50-3c8e84325f7c
