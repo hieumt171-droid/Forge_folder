@@ -1,0 +1,33 @@
+// ✅ GOOD: Structured JSON logging
+
+console.log(JSON.stringify({
+
+  level: 'info',          // 'info' | 'warn' | 'error' | 'debug'
+
+  message: 'Fetching issue from Jira API',
+
+  functionName: 'getIssueDetails',
+
+  issueKey: issueKey,
+
+  accountId: context.accountId,
+
+  timestamp: new Date().toISOString()
+
+}));
+
+// Đo performance với durationMs:
+
+const startTime = Date.now();
+
+const result = await doExpensiveOperation();
+
+console.log(JSON.stringify({
+
+  level: 'info',
+
+  message: 'Operation completed',
+
+  durationMs: Date.now() - startTime
+
+}));

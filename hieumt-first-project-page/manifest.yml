@@ -1,0 +1,30 @@
+modules:
+  jira:projectPage:
+    - key: hieumt-first-project-page-hello-world-project-page
+      resource: main
+      resolver:
+        function: resolver
+      pages:
+        - title: Overview
+          route: overview
+        - title: Recent Issues
+          route: recent-issues
+        - title: Team
+          route: team
+      render: native
+      title: Project Hub
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/9b23f6b4-b7a5-4b9d-9e60-88643d0d8a1a
+permissions:
+  scopes:
+    - read:jira-work

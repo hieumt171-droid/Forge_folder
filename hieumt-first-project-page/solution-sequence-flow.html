@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Hub - Sequence Flow</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; line-height: 1.45; }
+    h1, h2 { margin-bottom: 8px; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; background: #fafafa; }
+    code { background: #f2f2f2; padding: 2px 4px; border-radius: 4px; }
+    pre { background: #111; color: #d6ffd6; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    ul { margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Project Hub Sequence Flow</h1>
+  <p>This document explains runtime flow for <code>jira:projectPage</code> with 3 sub-pages: Overview, Recent Issues, Team.</p>
+
+  <h2>1) Startup flow</h2>
+  <div class="box">
+    <ol>
+      <li>Jira opens <code>Project Hub</code> page.</li>
+      <li>Frontend bootstraps from <code>src/frontend/index.jsx</code>.</li>
+      <li>Frontend calls <code>view.getContext()</code> to get project context.</li>
+      <li>Frontend calls <code>view.createHistory()</code> and normalizes path to one of:
+        <code>/overview</code>, <code>/recent-issues</code>, <code>/team</code>.</li>
+      <li>React Router (<code>HistoryRouter + Routes</code>) renders the matched page.</li>
+    </ol>
+  </div>
+
+  <h2>2) Route-specific data flow</h2>
+  <div class="box">
+    <p><strong>Overview route</strong> (<code>/overview</code>)</p>
+    <ul>
+      <li>Frontend invoke: <code>invoke('getOverviewData', { project })</code></li>
+      <li>Backend resolver runs JQL count query for project issues.</li>
+      <li>Returns: <code>{ projectKey, projectType, issueCount }</code></li>
+    </ul>
+    <p><strong>Recent Issues route</strong> (<code>/recent-issues</code>)</p>
+    <ul>
+      <li>Frontend invoke: <code>invoke('getRecentIssues', { project })</code></li>
+      <li>Backend runs JQL: <code>project = KEY ORDER BY created DESC</code>, <code>maxResults=5</code>.</li>
+      <li>Returns 5 newest issues with summary/status/priority/assignee/created.</li>
+    </ul>
+    <p><strong>Team route</strong> (<code>/team</code>)</p>
+    <ul>
+      <li>Frontend invoke: <code>invoke('getTeamAssignments', { project })</code></li>
+      <li>Backend runs JQL in 7 days window with non-empty assignee.</li>
+      <li>Returns de-duplicated assignee list.</li>
+    </ul>
+  </div>
+
+  <h2>3) F5 behavior and active sidebar</h2>
+  <div class="box">
+    <ul>
+      <li>Because route is persisted by Forge history, pressing F5 on <code>/recent-issues</code> or <code>/team</code> re-renders the same route.</li>
+      <li>Manifest <code>pages</code> entries map route segments to Jira sidebar items, so active menu highlight follows current route.</li>
+      <li>Invalid routes are normalized to <code>/overview</code> in frontend startup.</li>
+    </ul>
+  </div>
+
+  <h2>4) Logging format (from formatLog)</h2>
+  <div class="box">
+    <p>Each resolver logs structured JSON at request start, response received, completion, and failure.</p>
+<pre>{
+  "level": "info",
+  "message": "Jira API request started",
+  "functionName": "getRecentIssues",
+  "projectKey": "ABC",
+  "accountId": "xxx",
+  "request": { "method": "GET", "path": "/rest/api/3/search" },
+  "timestamp": "2026-05-07T09:00:00.000Z"
+}
+
+{
+  "level": "info",
+  "message": "Operation completed",
+  "functionName": "getRecentIssues",
+  "projectKey": "ABC",
+  "durationMs": 142,
+  "timestamp": "2026-05-07T09:00:00.142Z"
+}</pre>
+  </div>
+</body>
+</html>
