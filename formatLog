@@ -1,33 +1,55 @@
-// ✅ GOOD: Structured JSON logging
+// Structured JSON logging (Forge resolver / function)
+
+// Bắt buộc / nên có trên mọi dòng log:
+//   level       — 'info' | 'warn' | 'error' | 'debug'
+//   message     — mô tả ngắn, cố định (để filter trong log aggregator)
+//   functionName — tên resolver/handler
+//   accountId   — context.accountId hoặc null
+//   timestamp   — new Date().toISOString()
+
+// Context nghiệp vụ (chọn field phẳng phù hợp, không nest object tùy tiện):
+//   issueKey    — khi thao tác theo issue
+//   projectKey  — khi thao tác theo project
+
+// Khi đo thời gian một nhánh xử lý:
+//   durationMs  — Date.now() - startTime
+
+// Ví dụ — GOOD
 
 console.log(JSON.stringify({
-
-  level: 'info',          // 'info' | 'warn' | 'error' | 'debug'
-
+  level: 'info',
   message: 'Fetching issue from Jira API',
-
   functionName: 'getIssueDetails',
-
   issueKey: issueKey,
-
   accountId: context.accountId,
-
   timestamp: new Date().toISOString()
-
 }));
 
-// Đo performance với durationMs:
+// Ví dụ — project resolver
+
+console.log(JSON.stringify({
+  level: 'info',
+  message: 'Jira API request started',
+  functionName: 'getOverviewData',
+  projectKey: projectKey,
+  accountId: context.accountId,
+  timestamp: new Date().toISOString(),
+  requestMethod: 'POST',
+  requestPath: '/rest/api/3/search/approximate-count',
+  jql: jql
+}));
+
+// Operation completed + duration
 
 const startTime = Date.now();
-
 const result = await doExpensiveOperation();
 
 console.log(JSON.stringify({
-
   level: 'info',
-
   message: 'Operation completed',
-
+  functionName: 'getIssueDetails',
+  issueKey: issueKey,
+  accountId: context.accountId,
+  timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime
-
 }));

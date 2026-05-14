@@ -1,0 +1,39 @@
+modules:
+  confluence:contextMenu:
+    - key: hieumt-confluence-context-menu-hello-world-context-menu
+      resource: main
+      render: native
+      resolver:
+        function: resolver
+      title: Tạo Jira issue từ text chọn
+  jira:issuePanel:
+    - key: hieumt-confluence-context-menu-jira-install-stub
+      resource: jira-stub
+      resolver:
+        function: resolver
+      render: native
+      title: Tạo issue từ Confluence (cài Jira)
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+  - key: jira-stub
+    path: src/frontend/jira-install-stub.jsx
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/987bef6c-2b27-4ff1-b068-3dd9979df878
+  compatibility:
+    confluence:
+      required: true
+    jira:
+      required: false

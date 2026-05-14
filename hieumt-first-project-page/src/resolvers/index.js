@@ -11,12 +11,31 @@ const getProjectFromPayload = (payload) => {
   };
 };
 
-const buildLogBase = ({ functionName, projectKey, accountId }) => ({
+/**
+ * JSON log một dòng — cùng contract với `formatLog` ở root repo:
+ * level, message, functionName, accountId, timestamp; thêm field phẳng (projectKey, durationMs, …).
+ */
+const logEvent = ({
+  level = 'info',
+  message,
   functionName,
   projectKey,
   accountId,
-  timestamp: new Date().toISOString()
-});
+  durationMs,
+  ...extra
+}) => {
+  const record = {
+    level,
+    message,
+    functionName,
+    ...(projectKey != null ? { projectKey } : {}),
+    accountId: accountId ?? null,
+    timestamp: new Date().toISOString(),
+    ...extra,
+    ...(durationMs != null ? { durationMs } : {})
+  };
+  console.log(JSON.stringify(record));
+};
 
 resolver.define('getOverviewData', async ({ payload, context }) => {
   const startTime = Date.now();
@@ -28,12 +47,17 @@ resolver.define('getOverviewData', async ({ payload, context }) => {
 
   const jql = `project = ${projectKey}`;
   const requestPath = '/rest/api/3/search/approximate-count';
-  console.log(JSON.stringify({
+
+  logEvent({
     level: 'info',
     message: 'Jira API request started',
-    ...buildLogBase({ functionName: 'getOverviewData', projectKey, accountId: context?.accountId }),
-    request: { method: 'POST', path: requestPath, jql }
-  }));
+    functionName: 'getOverviewData',
+    projectKey,
+    accountId: context?.accountId,
+    requestMethod: 'POST',
+    requestPath,
+    jql
+  });
 
   try {
     const response = await api.asApp().requestJira(route`/rest/api/3/search/approximate-count`, {
@@ -44,24 +68,31 @@ resolver.define('getOverviewData', async ({ payload, context }) => {
       },
       body: JSON.stringify({ jql })
     });
-    console.log(JSON.stringify({
+
+    logEvent({
       level: 'info',
       message: 'Jira API response received',
-      ...buildLogBase({ functionName: 'getOverviewData', projectKey, accountId: context?.accountId }),
-      response: { status: response.status, ok: response.ok },
+      functionName: 'getOverviewData',
+      projectKey,
+      accountId: context?.accountId,
+      responseStatus: response.status,
+      responseOk: response.ok,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log(JSON.stringify({
+      logEvent({
         level: 'error',
         message: 'Jira API call failed',
-        ...buildLogBase({ functionName: 'getOverviewData', projectKey, accountId: context?.accountId }),
-        response: { status: response.status, ok: response.ok },
+        functionName: 'getOverviewData',
+        projectKey,
+        accountId: context?.accountId,
+        responseStatus: response.status,
+        responseOk: response.ok,
         errorText: errorText.substring(0, 300),
         durationMs: Date.now() - startTime
-      }));
+      });
       throw new Error(`Failed to load issue count. Status: ${response.status}`);
     }
 
@@ -72,22 +103,27 @@ resolver.define('getOverviewData', async ({ payload, context }) => {
       issueCount: data.count ?? 0
     };
 
-    console.log(JSON.stringify({
+    logEvent({
       level: 'info',
       message: 'Operation completed',
-      ...buildLogBase({ functionName: 'getOverviewData', projectKey, accountId: context?.accountId }),
+      functionName: 'getOverviewData',
+      projectKey,
+      accountId: context?.accountId,
+      issueCount: result.issueCount,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     return result;
   } catch (error) {
-    console.log(JSON.stringify({
+    logEvent({
       level: 'error',
       message: 'Operation failed',
-      ...buildLogBase({ functionName: 'getOverviewData', projectKey, accountId: context?.accountId }),
+      functionName: 'getOverviewData',
+      projectKey,
+      accountId: context?.accountId,
       errorMessage: error?.message,
       durationMs: Date.now() - startTime
-    }));
+    });
     throw error;
   }
 });
@@ -103,12 +139,18 @@ resolver.define('getRecentIssues', async ({ payload, context }) => {
   const requestPath = '/rest/api/3/search/jql';
   const fields = ['summary', 'status', 'assignee', 'created', 'priority'];
 
-  console.log(JSON.stringify({
+  logEvent({
     level: 'info',
     message: 'Jira API request started',
-    ...buildLogBase({ functionName: 'getRecentIssues', projectKey, accountId: context?.accountId }),
-    request: { method: 'POST', path: requestPath, jql, maxResults: 5, fields }
-  }));
+    functionName: 'getRecentIssues',
+    projectKey,
+    accountId: context?.accountId,
+    requestMethod: 'POST',
+    requestPath,
+    jql,
+    maxResults: 5,
+    fields: fields.join(',')
+  });
 
   try {
     const response = await api.asApp().requestJira(route`/rest/api/3/search/jql`, {
@@ -124,24 +166,30 @@ resolver.define('getRecentIssues', async ({ payload, context }) => {
       })
     });
 
-    console.log(JSON.stringify({
+    logEvent({
       level: 'info',
       message: 'Jira API response received',
-      ...buildLogBase({ functionName: 'getRecentIssues', projectKey, accountId: context?.accountId }),
-      response: { status: response.status, ok: response.ok },
+      functionName: 'getRecentIssues',
+      projectKey,
+      accountId: context?.accountId,
+      responseStatus: response.status,
+      responseOk: response.ok,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log(JSON.stringify({
+      logEvent({
         level: 'error',
         message: 'Jira API call failed',
-        ...buildLogBase({ functionName: 'getRecentIssues', projectKey, accountId: context?.accountId }),
-        response: { status: response.status, ok: response.ok },
+        functionName: 'getRecentIssues',
+        projectKey,
+        accountId: context?.accountId,
+        responseStatus: response.status,
+        responseOk: response.ok,
         errorText: errorText.substring(0, 300),
         durationMs: Date.now() - startTime
-      }));
+      });
       throw new Error(`Failed to load recent issues. Status: ${response.status}`);
     }
 
@@ -155,22 +203,27 @@ resolver.define('getRecentIssues', async ({ payload, context }) => {
       created: issue.fields?.created || null
     }));
 
-    console.log(JSON.stringify({
+    logEvent({
       level: 'info',
       message: 'Operation completed',
-      ...buildLogBase({ functionName: 'getRecentIssues', projectKey, accountId: context?.accountId }),
+      functionName: 'getRecentIssues',
+      projectKey,
+      accountId: context?.accountId,
+      resultRowCount: result.length,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     return result;
   } catch (error) {
-    console.log(JSON.stringify({
+    logEvent({
       level: 'error',
       message: 'Operation failed',
-      ...buildLogBase({ functionName: 'getRecentIssues', projectKey, accountId: context?.accountId }),
+      functionName: 'getRecentIssues',
+      projectKey,
+      accountId: context?.accountId,
       errorMessage: error?.message,
       durationMs: Date.now() - startTime
-    }));
+    });
     throw error;
   }
 });
@@ -186,12 +239,18 @@ resolver.define('getTeamAssignments', async ({ payload, context }) => {
   const requestPath = '/rest/api/3/search/jql';
   const fields = ['assignee'];
 
-  console.log(JSON.stringify({
+  logEvent({
     level: 'info',
     message: 'Jira API request started',
-    ...buildLogBase({ functionName: 'getTeamAssignments', projectKey, accountId: context?.accountId }),
-    request: { method: 'POST', path: requestPath, jql, maxResults: 50, fields }
-  }));
+    functionName: 'getTeamAssignments',
+    projectKey,
+    accountId: context?.accountId,
+    requestMethod: 'POST',
+    requestPath,
+    jql,
+    maxResults: 50,
+    fields: fields.join(',')
+  });
 
   try {
     const response = await api.asApp().requestJira(route`/rest/api/3/search/jql`, {
@@ -207,24 +266,30 @@ resolver.define('getTeamAssignments', async ({ payload, context }) => {
       })
     });
 
-    console.log(JSON.stringify({
+    logEvent({
       level: 'info',
       message: 'Jira API response received',
-      ...buildLogBase({ functionName: 'getTeamAssignments', projectKey, accountId: context?.accountId }),
-      response: { status: response.status, ok: response.ok },
+      functionName: 'getTeamAssignments',
+      projectKey,
+      accountId: context?.accountId,
+      responseStatus: response.status,
+      responseOk: response.ok,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log(JSON.stringify({
+      logEvent({
         level: 'error',
         message: 'Jira API call failed',
-        ...buildLogBase({ functionName: 'getTeamAssignments', projectKey, accountId: context?.accountId }),
-        response: { status: response.status, ok: response.ok },
+        functionName: 'getTeamAssignments',
+        projectKey,
+        accountId: context?.accountId,
+        responseStatus: response.status,
+        responseOk: response.ok,
         errorText: errorText.substring(0, 300),
         durationMs: Date.now() - startTime
-      }));
+      });
       throw new Error(`Failed to load team assignments. Status: ${response.status}`);
     }
 
@@ -241,22 +306,27 @@ resolver.define('getTeamAssignments', async ({ payload, context }) => {
     });
 
     const result = Array.from(uniqueUsers.values());
-    console.log(JSON.stringify({
+    logEvent({
       level: 'info',
       message: 'Operation completed',
-      ...buildLogBase({ functionName: 'getTeamAssignments', projectKey, accountId: context?.accountId }),
+      functionName: 'getTeamAssignments',
+      projectKey,
+      accountId: context?.accountId,
+      resultRowCount: result.length,
       durationMs: Date.now() - startTime
-    }));
+    });
 
     return result;
   } catch (error) {
-    console.log(JSON.stringify({
+    logEvent({
       level: 'error',
       message: 'Operation failed',
-      ...buildLogBase({ functionName: 'getTeamAssignments', projectKey, accountId: context?.accountId }),
+      functionName: 'getTeamAssignments',
+      projectKey,
+      accountId: context?.accountId,
       errorMessage: error?.message,
       durationMs: Date.now() - startTime
-    }));
+    });
     throw error;
   }
 });
