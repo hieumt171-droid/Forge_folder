@@ -1,0 +1,23 @@
+modules:
+  jira:projectPage:
+    - key: hieumt-dynmic-table-and-sorting-filter-hello-world-project-page
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: hieumt_dynmic_table_and_sorting_filter
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/cb39372f-d97a-4693-aab3-171984b8381b
