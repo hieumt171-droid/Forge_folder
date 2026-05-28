@@ -1,0 +1,21 @@
+modules:
+  jira:issuePanel:
+    - key: hieumt-practive-read-product-context-hello-world-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: hieumt_practive_read_product_context
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/142f297d-96bc-43e0-bb0d-7af990c1f64c
