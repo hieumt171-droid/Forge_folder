@@ -1,0 +1,23 @@
+modules:
+  jira:issueAction:
+    - key: hieumt-prative-form-validation-v1-issue-action
+      resource: main
+      resolver:
+        function: resolver
+      viewportSize: medium
+      title: hieumt_prative_form_validation_v1
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/hello-world/build
+permissions:
+  scopes:
+    - storage:app
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/0abf9bab-771e-426d-836d-88c254eebafb
