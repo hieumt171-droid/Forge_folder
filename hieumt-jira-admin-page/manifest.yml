@@ -1,0 +1,32 @@
+modules:
+  jira:adminPage:
+    - key: hieumt-jira-admin-page-main
+      resource: main-admin
+      resolver:
+        function: resolver
+      render: native
+      title: API Key Admin
+    - key: hieumt-jira-admin-page-configure
+      resource: configure-admin
+      resolver:
+        function: resolver
+      render: native
+      title: Cấu hình API key
+      useAsConfig: true
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main-admin
+    path: src/frontend/main-admin-page.jsx
+  - key: configure-admin
+    path: src/frontend/main-configure-page.jsx
+permissions:
+  scopes:
+    - storage:app
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/934af2d5-9177-405c-9622-032c12fd9a55
