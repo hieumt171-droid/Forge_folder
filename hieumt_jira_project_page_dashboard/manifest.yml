@@ -1,0 +1,23 @@
+modules:
+  jira:projectPage:
+    - key: hieumt-jira-project-page-dashboard-hello-world-project-page
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: hieumt_jira_project_page_dashboard
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/16084998-2cb2-4735-ba7f-0f91a6d37a52
