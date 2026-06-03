@@ -1,0 +1,24 @@
+modules:
+  jira:issuePanel:
+    - key: hieumt-issue-panel-custom-ui-hello-world-panel
+      resource: main
+      resolver:
+        function: resolver
+      viewportSize: medium
+      title: hieumt_issue_panel_custom_ui
+      icon: https://developer.atlassian.com/platform/forge/images/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/app/build
+permissions:
+  scopes:
+    - read:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/5ee05506-f092-4395-9fe2-c68c6dca496b
