@@ -1,2 +1,2 @@
 node_modules
-build
+# Không ignore build/ — Forge cần folder này khi deploy resource static/app/build

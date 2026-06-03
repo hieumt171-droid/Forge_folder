@@ -4,6 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "private": true,
+  "scripts": {
+    "build:ui": "npm run build --prefix static/app",
+    "dev:ui": "npm run dev:forge --prefix static/app",
+    "predeploy": "npm run build:ui"
+  },
   "devDependencies": {
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0"
