@@ -1,0 +1,28 @@
+modules:
+  confluence:spacePage:
+    - key: hieumt-confluence-space-health-report
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Space Health Report
+      route: space-health-report
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:page:confluence
+    - read:space:confluence
+    - read:label:confluence
+    - search:confluence
+    - write:label:confluence
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/1b8c147e-be93-46da-8d8e-ce1ef17284ec
