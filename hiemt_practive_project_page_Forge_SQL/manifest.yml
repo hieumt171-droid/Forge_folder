@@ -1,0 +1,29 @@
+modules:
+  sql:
+    - key: main
+      engine: mysql
+  scheduledTrigger:
+    - key: sprint-tasks-migration
+      function: runMigration
+      interval: fiveMinute
+  jira:projectPage:
+    - key: hiemt-practive-project-page-forge-sql-project-page
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Sprint Tasks (Forge SQL)
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: runMigration
+      handler: index.runMigration
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/f8a00b59-2382-4966-98e3-9176217610a6
