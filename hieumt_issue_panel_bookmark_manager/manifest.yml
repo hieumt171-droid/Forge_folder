@@ -1,0 +1,25 @@
+modules:
+  jira:issuePanel:
+    - key: hieumt-issue-panel-bookmarks
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Bookmarks
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - storage:app
+    - read:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/c7c9beeb-045a-49e0-b74f-11d5f9c22847
