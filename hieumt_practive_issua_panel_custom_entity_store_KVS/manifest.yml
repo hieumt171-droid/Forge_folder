@@ -1,0 +1,57 @@
+modules:
+  jira:issuePanel:
+    - key: hieumt-checklist-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Checklist
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  jira:issueContext:
+    - key: hieumt-checklist-issue-context
+      resource: context
+      resolver:
+        function: resolver
+      render: native
+      title: Checklist
+      label: Checklist
+      dynamicProperties:
+        function: dynamicProperties
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: dynamicProperties
+      handler: dynamic-properties.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+  - key: context
+    path: src/context/index.jsx
+permissions:
+  scopes:
+    - storage:app
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/8ae896f2-8a5a-41e5-8603-102e5bca8d60
+  storage:
+    entities:
+      - name: checklist-item
+        attributes:
+          title:
+            type: string
+          isDone:
+            type: boolean
+          priority:
+            type: integer
+          issueKey:
+            type: string
+        indexes:
+          - isDone
+          - name: by-issue-status
+            partition:
+              - issueKey
+            range:
+              - priority
