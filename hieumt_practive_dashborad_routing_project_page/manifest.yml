@@ -1,0 +1,26 @@
+modules:
+  jira:projectPage:
+    - key: hieumt-practive-dashborad-routing-project-page-hello-world-project-page
+      resource: main
+      resolver:
+        function: resolver
+      pages:
+        - title: Overview
+          route: overview
+        - title: Burndown Chart
+          route: burndown
+        - title: Issues
+          route: issues
+      title: hieumt_practive_dashborad_routing_project_page
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/app/build
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/15c3c01e-afa0-4a88-b4c8-e0f673405811
