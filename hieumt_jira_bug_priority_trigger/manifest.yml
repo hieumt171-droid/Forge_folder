@@ -1,0 +1,28 @@
+modules:
+  trigger:
+    - key: bug-priority-highest-trigger
+      function: bug-priority-handler
+      events:
+        - avi:jira:updated:issue
+      filter:
+        ignoreSelf: true
+        expression: |
+          try {
+            return event.issue.fields.project.key == 'HSF' && event.issue.fields.issueType.name == 'Bug';
+          } catch (e) {
+            throw e.message;
+          }
+        onError: RECEIVE_AND_LOG
+  function:
+    - key: bug-priority-handler
+      handler: index.run
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/a541b089-bc83-4f5e-af1f-d2a269117d5d

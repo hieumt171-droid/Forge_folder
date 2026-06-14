@@ -1,0 +1,25 @@
+# Đổi HIEUMT thành project key site của bạn trước khi deploy.
+modules:
+  trigger:
+    - key: welcome-issue-created-trigger
+      function: welcome-issue-handler
+      events:
+        - avi:jira:created:issue
+      filter:
+        ignoreSelf: true
+        expression: event.issue.fields?.project?.key == 'HSF'
+        onError: RECEIVE_AND_LOG
+  function:
+    - key: welcome-issue-handler
+      handler: index.run
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+    - storage:app
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/279b98f9-ef84-471f-b62d-7d8e50196239

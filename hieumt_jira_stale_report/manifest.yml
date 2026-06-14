@@ -1,0 +1,39 @@
+modules:
+  scheduledTrigger:
+    - key: stale-report-daily
+      function: staleReportScheduled
+      interval: day
+  webtrigger:
+    - key: test-report
+      function: staleReportWeb
+      urlFormat: v2
+      response:
+        type: dynamic
+  jira:globalPage:
+    - key: stale-report-global-page
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Stale Report
+  function:
+    - key: staleReportScheduled
+      handler: index.staleReportScheduled
+      timeoutSeconds: 120
+    - key: staleReportWeb
+      handler: index.staleReportWeb
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:jira-work
+    - storage:app
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/9d6ed8f1-2162-4b80-a091-5eda2f0fd851

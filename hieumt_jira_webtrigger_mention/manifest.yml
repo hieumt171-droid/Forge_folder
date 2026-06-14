@@ -1,0 +1,20 @@
+modules:
+  webtrigger:
+    - key: mention-webhook
+      function: mentionWebhook
+      urlFormat: v2
+      response:
+        type: dynamic
+  function:
+    - key: mentionWebhook
+      handler: index.mentionWebhook
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/91b7ec21-91ba-4ea6-ac19-762293e9cb71

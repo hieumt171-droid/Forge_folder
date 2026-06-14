@@ -1,0 +1,10 @@
+{
+  "name": "hieumt-jira-webtrigger-mention",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@forge/api": "7.1.4"
+  }
+}

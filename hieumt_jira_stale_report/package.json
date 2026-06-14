@@ -1,0 +1,22 @@
+{
+  "name": "hieumt-jira-stale-report",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "lint": "eslint src/**/*"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0"
+  },
+  "dependencies": {
+    "@forge/api": "7.1.4",
+    "@forge/bridge": "5.16.2",
+    "@forge/kvs": "^1.6.2",
+    "@forge/react": "11.16.1",
+    "@forge/resolver": "1.8.0",
+    "react": "^18.2.0"
+  }
+}
