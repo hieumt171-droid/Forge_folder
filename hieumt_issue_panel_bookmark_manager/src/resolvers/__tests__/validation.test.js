@@ -82,9 +82,3 @@ describe('buildBookmarkKey', () => {
   });
 });
 
-// DEMO bài tập: xóa block này sau khi verify CI block merge
-describe('CI failure demo', () => {
-  test('INTENTIONAL FAIL — verify PR blocked', () => {
-    expect(true).toBe(false);
-  });
-});
