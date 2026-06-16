@@ -81,3 +81,10 @@ describe('buildBookmarkKey', () => {
     expect(buildBookmarkKey('user-1', 'HSF-6')).toBe('bookmark:user-1:HSF-6');
   });
 });
+
+// DEMO bài tập: xóa block này sau khi verify CI block merge
+describe('CI failure demo', () => {
+  test('INTENTIONAL FAIL — verify PR blocked', () => {
+    expect(true).toBe(false);
+  });
+});
