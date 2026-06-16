@@ -1,15 +1,10 @@
 import api, { route } from '@forge/api';
 import { kvs } from '@forge/kvs';
+import { createLogger } from './lib/logger.js';
 
 /** Phải khớp filter.expression trong manifest.yml */
 const TARGET_PROJECT_KEY = 'HSF';
-
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
-});
+const logger = createLogger('welcome-issue-trigger');
 
 const DEDUP_TTL = { unit: 'HOURS', value: 24 };
 
@@ -38,15 +33,11 @@ const resolveReporterLabel = async (event, issueKey) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('resolveReporter.error', {
-          issueKey,
-          status: response.status,
-          body: body.slice(0, 300)
-        })
-      )
-    );
+    logger.error('resolveReporter', {
+      issueKey,
+      status: response.status,
+      bodyPreview: body.slice(0, 300)
+    });
     return 'Unknown reporter';
   }
 
@@ -92,15 +83,11 @@ const addWelcomeComment = async (issueKey, adfBody) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('addWelcomeComment.error', {
-          issueKey,
-          status: response.status,
-          body: body.slice(0, 400)
-        })
-      )
-    );
+    logger.error('addWelcomeComment', {
+      issueKey,
+      status: response.status,
+      bodyPreview: body.slice(0, 400)
+    });
     throw new Error(`Không thêm được comment: ${response.status}`);
   }
 
@@ -116,103 +103,59 @@ export async function run(event) {
   const projectKey = String(event?.issue?.fields?.project?.key ?? '').trim();
   const selfGenerated = Boolean(event?.selfGenerated);
 
-  console.log(
-    JSON.stringify(
-      formatLog('welcomeIssueTrigger.run.request', {
-        issueKey,
-        projectKey,
-        selfGenerated,
-        eventType: event?.eventType
-      })
-    )
-  );
+  return logger.run(
+    'run',
+    { issueKey, projectKey, selfGenerated, eventType: event?.eventType },
+    async () => {
+      if (!issueKey) {
+        return { ok: false, reason: 'missing_issue_key' };
+      }
 
-  if (!issueKey) {
-    console.log(JSON.stringify(formatLog('welcomeIssueTrigger.run.skip', { reason: 'missing_issue_key' })));
-    return { ok: false, reason: 'missing_issue_key' };
-  }
+      if (projectKey !== TARGET_PROJECT_KEY) {
+        return { ok: false, reason: 'project_mismatch', projectKey, expected: TARGET_PROJECT_KEY };
+      }
 
-  // Validate handler (bổ sung cho filter.expression server-side)
-  if (projectKey !== TARGET_PROJECT_KEY) {
-    console.log(
-      JSON.stringify(
-        formatLog('welcomeIssueTrigger.run.skip', {
-          reason: 'project_mismatch',
-          projectKey,
-          expected: TARGET_PROJECT_KEY
-        })
-      )
-    );
-    return { ok: false, reason: 'project_mismatch' };
-  }
+      const dedupKey = buildDedupKey(issueKey);
+      const existing = await kvs.get(dedupKey);
 
-  const dedupKey = buildDedupKey(issueKey);
-  const existing = await kvs.get(dedupKey);
-
-  if (existing) {
-    console.log(
-      JSON.stringify(
-        formatLog('welcomeIssueTrigger.run.idempotent_skip', {
+      if (existing) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: 'already_processed',
           issueKey,
-          dedupKey,
           claimedAt: existing?.claimedAt
-        })
-      )
-    );
-    return { ok: true, skipped: true, reason: 'already_processed', issueKey };
-  }
+        };
+      }
 
-  let dedupClaimed = false;
+      let dedupClaimed = false;
 
-  try {
-    await kvs.set(
-      dedupKey,
-      { issueKey, claimedAt: new Date().toISOString() },
-      { ttl: DEDUP_TTL }
-    );
-    dedupClaimed = true;
+      try {
+        await kvs.set(
+          dedupKey,
+          { issueKey, claimedAt: new Date().toISOString() },
+          { ttl: DEDUP_TTL }
+        );
+        dedupClaimed = true;
 
-    const timestampLabel = formatTimestamp();
-    const reporterLabel = await resolveReporterLabel(event, issueKey);
-    const adfBody = buildWelcomeCommentAdf({ timestampLabel, reporterLabel });
-    const comment = await addWelcomeComment(issueKey, adfBody);
+        const timestampLabel = formatTimestamp();
+        const reporterLabel = await resolveReporterLabel(event, issueKey);
+        const adfBody = buildWelcomeCommentAdf({ timestampLabel, reporterLabel });
+        const comment = await addWelcomeComment(issueKey, adfBody);
 
-    console.log(
-      JSON.stringify(
-        formatLog('welcomeIssueTrigger.run.success', {
+        return {
+          ok: true,
           issueKey,
-          commentId: comment?.id,
+          commentId: comment?.id ?? null,
           reporterLabel
-        })
-      )
-    );
-
-    return {
-      ok: true,
-      issueKey,
-      commentId: comment?.id ?? null
-    };
-  } catch (error) {
-    if (dedupClaimed) {
-      await kvs.delete(dedupKey);
-      console.log(
-        JSON.stringify(
-          formatLog('welcomeIssueTrigger.run.dedup_rollback', {
-            issueKey,
-            dedupKey
-          })
-        )
-      );
+        };
+      } catch (error) {
+        if (dedupClaimed) {
+          await kvs.delete(dedupKey);
+          logger.error('dedupRollback', { issueKey, dedupKey });
+        }
+        throw error;
+      }
     }
-
-    console.log(
-      JSON.stringify(
-        formatLog('welcomeIssueTrigger.run.error', {
-          issueKey,
-          message: error?.message
-        })
-      )
-    );
-    throw error;
-  }
+  );
 }

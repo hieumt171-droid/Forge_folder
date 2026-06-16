@@ -1,6 +1,8 @@
 import api, { route } from '@forge/api';
+import { createLogger } from './lib/logger.js';
 
 const TARGET_PROJECT_KEY = 'HSF';
+const logger = createLogger('bug-priority-trigger');
 
 const HIGHEST_PRIORITY_NAMES = new Set(['highest', 'cao nhất', 'blocker']);
 
@@ -17,13 +19,6 @@ const getIssueTypeName = (event) =>
 
 const getPriorityName = (event) =>
   String(event?.issue?.fields?.priority?.name ?? '');
-
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
-});
 
 /** Handler validate: priority phải *vừa đổi* sang Highest (changelog), không chỉ đang là Highest */
 const priorityChangedToHighest = (event) => {
@@ -92,15 +87,11 @@ const fetchProjectLeadAccountId = async (projectKey) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('fetchProjectLead.error', {
-          projectKey,
-          status: response.status,
-          body: body.slice(0, 300)
-        })
-      )
-    );
+    logger.error('fetchProjectLead', {
+      projectKey,
+      status: response.status,
+      bodyPreview: body.slice(0, 300)
+    });
     throw new Error(`Không lấy được project lead: ${response.status}`);
   }
 
@@ -125,16 +116,12 @@ const assignIssueToLead = async (issueKey, accountId) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('assignIssue.error', {
-          issueKey,
-          accountId,
-          status: response.status,
-          body: body.slice(0, 300)
-        })
-      )
-    );
+    logger.error('assignIssue', {
+      issueKey,
+      accountId,
+      status: response.status,
+      bodyPreview: body.slice(0, 300)
+    });
     throw new Error(`Assign thất bại: ${response.status}`);
   }
 };
@@ -151,15 +138,11 @@ const addWarningComment = async (issueKey, adfBody) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('addWarningComment.error', {
-          issueKey,
-          status: response.status,
-          body: body.slice(0, 300)
-        })
-      )
-    );
+    logger.error('addWarningComment', {
+      issueKey,
+      status: response.status,
+      bodyPreview: body.slice(0, 300)
+    });
     throw new Error(`Không thêm được comment: ${response.status}`);
   }
 
@@ -172,104 +155,63 @@ export async function run(event) {
   const priorityName = getPriorityName(event);
   const issueTypeName = getIssueTypeName(event);
 
-  console.log(
-    JSON.stringify(
-      formatLog('bugPriorityTrigger.run.request', {
-        issueKey,
-        projectKey,
-        issueTypeName,
-        priorityName,
-        selfGenerated: Boolean(event?.selfGenerated),
-        changelog: (event?.changelog?.items ?? []).map((i) => ({
-          field: i?.field,
-          from: i?.fromString ?? i?.from,
-          to: i?.toString ?? i?.to
-        }))
-      })
-    )
-  );
-
-  if (!issueKey) {
-    return { ok: false, reason: 'missing_issue_key' };
-  }
-
-  if (projectKey && projectKey !== TARGET_PROJECT_KEY) {
-    console.log(
-      JSON.stringify(
-        formatLog('bugPriorityTrigger.run.skip', {
-          reason: 'project_mismatch',
-          projectKey,
-          expected: TARGET_PROJECT_KEY
-        })
-      )
-    );
-    return { ok: false, reason: 'project_mismatch' };
-  }
-
-  if (!isBugIssue(event)) {
-    console.log(JSON.stringify(formatLog('bugPriorityTrigger.run.skip', { reason: 'not_bug' })));
-    return { ok: false, reason: 'not_bug' };
-  }
-
-  if (!priorityChangedToHighest(event)) {
-    console.log(
-      JSON.stringify(
-        formatLog('bugPriorityTrigger.run.skip', {
-          reason: 'priority_not_changed_to_highest',
-          priorityName
-        })
-      )
-    );
-    return { ok: false, reason: 'priority_not_changed_to_highest' };
-  }
-
-  try {
-    const { accountId: leadAccountId, displayName: leadLabel } =
-      await fetchProjectLeadAccountId(projectKey);
-
-    if (!leadAccountId) {
-      throw new Error(`Project ${projectKey} không có project lead.`);
-    }
-
-    await assignIssueToLead(issueKey, leadAccountId);
-
-    const timestampLabel = new Date().toLocaleString('vi-VN', {
-      timeZone: 'Asia/Ho_Chi_Minh'
-    });
-    const adfBody = buildWarningCommentAdf({
+  return logger.run(
+    'run',
+    {
       issueKey,
       projectKey,
-      leadLabel,
-      timestampLabel
-    });
-    const comment = await addWarningComment(issueKey, adfBody);
+      issueTypeName,
+      priorityName,
+      selfGenerated: Boolean(event?.selfGenerated),
+      changelog: (event?.changelog?.items ?? []).map((i) => ({
+        field: i?.field,
+        from: i?.fromString ?? i?.from,
+        to: i?.toString ?? i?.to
+      }))
+    },
+    async () => {
+      if (!issueKey) {
+        return { ok: false, reason: 'missing_issue_key' };
+      }
 
-    console.log(
-      JSON.stringify(
-        formatLog('bugPriorityTrigger.run.success', {
-          issueKey,
-          projectKey,
-          leadAccountId,
-          commentId: comment?.id
-        })
-      )
-    );
+      if (projectKey && projectKey !== TARGET_PROJECT_KEY) {
+        return { ok: false, reason: 'project_mismatch', projectKey, expected: TARGET_PROJECT_KEY };
+      }
 
-    return {
-      ok: true,
-      issueKey,
-      assignedTo: leadAccountId,
-      commentId: comment?.id ?? null
-    };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('bugPriorityTrigger.run.error', {
-          issueKey,
-          message: error?.message
-        })
-      )
-    );
-    throw error;
-  }
+      if (!isBugIssue(event)) {
+        return { ok: false, reason: 'not_bug' };
+      }
+
+      if (!priorityChangedToHighest(event)) {
+        return { ok: false, reason: 'priority_not_changed_to_highest', priorityName };
+      }
+
+      const { accountId: leadAccountId, displayName: leadLabel } =
+        await fetchProjectLeadAccountId(projectKey);
+
+      if (!leadAccountId) {
+        throw new Error(`Project ${projectKey} không có project lead.`);
+      }
+
+      await assignIssueToLead(issueKey, leadAccountId);
+
+      const timestampLabel = new Date().toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh'
+      });
+      const adfBody = buildWarningCommentAdf({
+        issueKey,
+        projectKey,
+        leadLabel,
+        timestampLabel
+      });
+      const comment = await addWarningComment(issueKey, adfBody);
+
+      return {
+        ok: true,
+        issueKey,
+        assignedTo: leadAccountId,
+        commentId: comment?.id ?? null
+      };
+    }
+  );
 }

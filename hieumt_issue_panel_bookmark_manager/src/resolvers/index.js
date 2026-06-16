@@ -1,6 +1,7 @@
 import Resolver from '@forge/resolver';
 import api, { route } from '@forge/api';
 import { kvs, WhereConditions } from '@forge/kvs';
+import { createLogger } from '../lib/logger.js';
 import {
   assertBookmarkOwnership,
   assertSelfOnly,
@@ -11,54 +12,12 @@ import {
 } from './validation.js';
 
 const BOOKMARK_LIST_LIMIT = 100;
+const logger = createLogger('bookmark-resolver');
 
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
+const resolverMeta = (req) => ({
+  accountId: req?.context?.accountId ?? null,
+  payloadKeys: Object.keys(req?.payload ?? {})
 });
-
-const getAppVersion = () => process.env.APP_VERSION ?? 'unknown';
-
-const isApiDebugMode = () =>
-  String(process.env.API_DEBUG_MODE ?? 'false').toLowerCase() === 'true';
-
-/** Log mỗi request — APP_VERSION luôn có; chi tiết payload khi API_DEBUG_MODE=true. */
-const logIncomingRequest = (resolverName, req) => {
-  const accountId = req?.context?.accountId ?? null;
-  const payload = req?.payload ?? {};
-  const appVersion = getAppVersion();
-  const debugMode = isApiDebugMode();
-
-  if (debugMode) {
-    console.log(
-      JSON.stringify(
-        formatLog('resolver.request', {
-          appVersion,
-          debugMode,
-          resolver: resolverName,
-          accountId,
-          payload,
-          contextKeys: Object.keys(req?.context ?? {})
-        })
-      )
-    );
-    return;
-  }
-
-  console.log(
-    JSON.stringify(
-      formatLog('resolver.request', {
-        appVersion,
-        debugMode,
-        resolver: resolverName,
-        accountId,
-        payloadKeys: Object.keys(payload)
-      })
-    )
-  );
-};
 
 const parseIssueKeyFromBookmarkKey = (key, accountId) => {
   const prefix = buildBookmarkPrefix(accountId);
@@ -69,23 +28,18 @@ const parseIssueKeyFromBookmarkKey = (key, accountId) => {
 };
 
 const fetchIssueFields = async (issueKey, accountId) => {
-  console.log(JSON.stringify(formatLog('fetchIssueFields.request', { issueKey, accountId })));
-
   const response = await api.asUser().requestJira(
     route`/rest/api/3/issue/${issueKey}?fields=summary,status`
   );
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('fetchIssueFields.error', {
-          issueKey,
-          status: response.status,
-          body: body.slice(0, 400)
-        })
-      )
-    );
+    logger.error('fetchIssueFields', {
+      issueKey,
+      accountId,
+      status: response.status,
+      bodyPreview: body.slice(0, 400)
+    });
     throw new Error(`Không lấy được issue ${issueKey}: ${response.status}`);
   }
 
@@ -94,7 +48,7 @@ const fetchIssueFields = async (issueKey, accountId) => {
   const status = fields?.status ?? {};
   const statusCategory = status?.statusCategory ?? {};
 
-  const snapshot = {
+  return {
     issueKey,
     summary: String(fields?.summary ?? ''),
     statusName: String(status?.name ?? ''),
@@ -102,17 +56,6 @@ const fetchIssueFields = async (issueKey, accountId) => {
     bookmarkedAt: new Date().toISOString(),
     accountId
   };
-
-  console.log(
-    JSON.stringify(
-      formatLog('fetchIssueFields.success', {
-        issueKey,
-        statusName: snapshot.statusName
-      })
-    )
-  );
-
-  return snapshot;
 };
 
 const mapBookmarkResults = (results, accountId) => {
@@ -148,191 +91,99 @@ const queryMyBookmarks = async (accountId, cursor) => {
 
 const resolver = new Resolver();
 
-resolver.define('getCurrentBookmark', async (req) => {
-  logIncomingRequest('getCurrentBookmark', req);
+const defineLogged = (name, handler) => {
+  resolver.define(name, (req) => logger.run(name, resolverMeta(req), () => handler(req)));
+};
+
+defineLogged('getCurrentBookmark', async (req) => {
   const accountId = assertSelfOnly(req);
   const issueKey = validateIssueKey(req?.payload?.issueKey);
+  const key = buildBookmarkKey(accountId, issueKey);
+  const stored = await kvs.get(key);
 
-  try {
-    const key = buildBookmarkKey(accountId, issueKey);
-    const stored = await kvs.get(key);
-    const isBookmarked = Boolean(stored);
-
-    if (stored) {
-      assertBookmarkOwnership(stored, accountId);
-    }
-
-    console.log(
-      JSON.stringify(
-        formatLog('getCurrentBookmark.success', { accountId, issueKey, isBookmarked })
-      )
-    );
-
-    return {
-      issueKey,
-      isBookmarked,
-      bookmark: stored ?? null
-    };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('getCurrentBookmark.error', {
-          accountId,
-          issueKey,
-          message: error?.message
-        })
-      )
-    );
-    throw error;
+  if (stored) {
+    assertBookmarkOwnership(stored, accountId);
   }
+
+  return {
+    issueKey,
+    isBookmarked: Boolean(stored),
+    bookmark: stored ?? null
+  };
 });
 
-resolver.define('toggleBookmark', async (req) => {
-  logIncomingRequest('toggleBookmark', req);
+defineLogged('toggleBookmark', async (req) => {
   const accountId = assertSelfOnly(req);
   const issueKey = validateIssueKey(req?.payload?.issueKey);
+  const key = buildBookmarkKey(accountId, issueKey);
+  const existing = await kvs.get(key);
 
-  try {
-    const key = buildBookmarkKey(accountId, issueKey);
-    const existing = await kvs.get(key);
-
-    if (existing) {
-      assertBookmarkOwnership(existing, accountId);
-      await kvs.delete(key);
-      console.log(
-        JSON.stringify(formatLog('toggleBookmark.removed', { accountId, issueKey }))
-      );
-      return {
-        action: 'removed',
-        issueKey,
-        isBookmarked: false,
-        message: `Đã bỏ bookmark ${issueKey}.`
-      };
-    }
-
-    const bookmark = await fetchIssueFields(issueKey, accountId);
-    await kvs.set(key, bookmark);
-
-    console.log(
-      JSON.stringify(formatLog('toggleBookmark.added', { accountId, issueKey }))
-    );
-
-    return {
-      action: 'added',
-      issueKey,
-      isBookmarked: true,
-      bookmark,
-      message: `Đã lưu bookmark ${issueKey}.`
-    };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('toggleBookmark.error', {
-          accountId,
-          issueKey,
-          message: error?.message
-        })
-      )
-    );
-    throw error;
-  }
-});
-
-resolver.define('getMyBookmarks', async (req) => {
-  logIncomingRequest('getMyBookmarks', req);
-  const accountId = assertSelfOnly(req);
-  const cursor = validateOptionalCursor(req?.payload?.cursor);
-
-  try {
-    const { results, nextCursor } = await queryMyBookmarks(accountId, cursor);
-    const bookmarks = mapBookmarkResults(results, accountId);
-
-    console.log(
-      JSON.stringify(
-        formatLog('getMyBookmarks.success', {
-          accountId,
-          count: bookmarks.length,
-          hasNextCursor: Boolean(nextCursor)
-        })
-      )
-    );
-
-    return { bookmarks, nextCursor: nextCursor ?? null };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('getMyBookmarks.error', { accountId, message: error?.message })
-      )
-    );
-    throw error;
-  }
-});
-
-resolver.define('listMyBookmarks', async (req) => {
-  logIncomingRequest('listMyBookmarks', req);
-  const accountId = assertSelfOnly(req);
-
-  try {
-    const { results } = await queryMyBookmarks(accountId, undefined);
-    const bookmarks = mapBookmarkResults(results, accountId);
-
-    console.log(
-      JSON.stringify(
-        formatLog('listMyBookmarks.success', { accountId, count: bookmarks.length })
-      )
-    );
-
-    return { bookmarks };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('listMyBookmarks.error', { accountId, message: error?.message })
-      )
-    );
-    throw error;
-  }
-});
-
-resolver.define('removeBookmark', async (req) => {
-  logIncomingRequest('removeBookmark', req);
-  const accountId = assertSelfOnly(req);
-  const issueKey = validateIssueKey(req?.payload?.issueKey);
-
-  try {
-    const key = buildBookmarkKey(accountId, issueKey);
-    const existing = await kvs.get(key);
-
-    if (!existing) {
-      console.log(
-        JSON.stringify(formatLog('removeBookmark.notFound', { accountId, issueKey }))
-      );
-      return {
-        issueKey,
-        removed: false,
-        message: `Bookmark ${issueKey} không tồn tại.`
-      };
-    }
-
+  if (existing) {
     assertBookmarkOwnership(existing, accountId);
     await kvs.delete(key);
+    return {
+      action: 'removed',
+      issueKey,
+      isBookmarked: false,
+      message: `Đã bỏ bookmark ${issueKey}.`
+    };
+  }
 
-    console.log(
-      JSON.stringify(formatLog('removeBookmark.success', { accountId, issueKey }))
-    );
+  const bookmark = await fetchIssueFields(issueKey, accountId);
+  await kvs.set(key, bookmark);
 
+  return {
+    action: 'added',
+    issueKey,
+    isBookmarked: true,
+    bookmark,
+    message: `Đã lưu bookmark ${issueKey}.`
+  };
+});
+
+defineLogged('getMyBookmarks', async (req) => {
+  const accountId = assertSelfOnly(req);
+  const cursor = validateOptionalCursor(req?.payload?.cursor);
+  const { results, nextCursor } = await queryMyBookmarks(accountId, cursor);
+  const bookmarks = mapBookmarkResults(results, accountId);
+
+  return {
+    bookmarks,
+    nextCursor: nextCursor ?? null,
+    count: bookmarks.length
+  };
+});
+
+defineLogged('listMyBookmarks', async (req) => {
+  const accountId = assertSelfOnly(req);
+  const { results } = await queryMyBookmarks(accountId, undefined);
+  const bookmarks = mapBookmarkResults(results, accountId);
+
+  return { bookmarks, count: bookmarks.length };
+});
+
+defineLogged('removeBookmark', async (req) => {
+  const accountId = assertSelfOnly(req);
+  const issueKey = validateIssueKey(req?.payload?.issueKey);
+  const key = buildBookmarkKey(accountId, issueKey);
+  const existing = await kvs.get(key);
+
+  if (!existing) {
     return {
       issueKey,
-      removed: true,
-      message: `Đã xóa bookmark ${issueKey}.`
+      removed: false,
+      message: `Bookmark ${issueKey} không tồn tại.`
     };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('removeBookmark.error', { accountId, issueKey, message: error?.message })
-      )
-    );
-    throw error;
   }
+
+  assertBookmarkOwnership(existing, accountId);
+  await kvs.delete(key);
+
+  return {
+    issueKey,
+    removed: true,
+    message: `Đã xóa bookmark ${issueKey}.`
+  };
 });
 
 export const handler = resolver.getDefinitions();

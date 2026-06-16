@@ -1,17 +1,13 @@
 import api, { route } from '@forge/api';
 import { kvs } from '@forge/kvs';
+import { createLogger } from './lib/logger.js';
 
 export const STALE_REPORT_KEY = 'stale-report:latest';
 export const STALE_JQL = 'status = "In Progress" AND updated <= -5d';
 const REPORT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const SCHEDULED_HOUR = 8;
 
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
-});
+const logger = createLogger('stale-report');
 
 const getHourInTimezone = (date = new Date()) => {
   const hourText = new Intl.DateTimeFormat('en-GB', {
@@ -37,31 +33,22 @@ const mapIssueRow = (issue) => {
 };
 
 export const fetchStaleIssues = async () => {
-  console.log(JSON.stringify(formatLog('fetchStaleIssues.request', { jql: STALE_JQL })));
-
   const response = await api.asApp().requestJira(
     route`/rest/api/3/search/jql?jql=${STALE_JQL}&maxResults=100&fields=summary,status,priority,assignee,updated`
   );
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('fetchStaleIssues.error', {
-          status: response.status,
-          body: body.slice(0, 400)
-        })
-      )
-    );
+    logger.error('fetchStaleIssues', {
+      jql: STALE_JQL,
+      status: response.status,
+      bodyPreview: body.slice(0, 400)
+    });
     throw new Error(`JQL search failed: ${response.status}`);
   }
 
   const data = await response.json();
-  const issues = (Array.isArray(data?.issues) ? data.issues : []).map(mapIssueRow);
-
-  console.log(JSON.stringify(formatLog('fetchStaleIssues.success', { count: issues.length })));
-
-  return issues;
+  return (Array.isArray(data?.issues) ? data.issues : []).map(mapIssueRow);
 };
 
 export const buildAndSaveStaleReport = async (source = 'unknown') => {
@@ -78,30 +65,11 @@ export const buildAndSaveStaleReport = async (source = 'unknown') => {
   };
 
   await kvs.set(STALE_REPORT_KEY, report);
-
-  console.log(
-    JSON.stringify(
-      formatLog('buildAndSaveStaleReport.success', {
-        source,
-        total: report.total,
-        key: STALE_REPORT_KEY
-      })
-    )
-  );
-
   return report;
 };
 
 export const getStoredStaleReport = async () => {
   const report = await kvs.get(STALE_REPORT_KEY);
-  console.log(
-    JSON.stringify(
-      formatLog('getStoredStaleReport', {
-        found: Boolean(report),
-        total: report?.total ?? 0
-      })
-    )
-  );
   return report ?? null;
 };
 
@@ -118,19 +86,8 @@ export const executeGenerateStaleReport = async ({
   source,
   enforceScheduleWindow = false
 }) => {
-  console.log(JSON.stringify(formatLog('generateStaleReport.run.request', { source })));
-
   if (enforceScheduleWindow && !shouldRunScheduledJob()) {
     const hour = getHourInTimezone();
-    console.log(
-      JSON.stringify(
-        formatLog('generateStaleReport.run.skip', {
-          reason: 'not_8am',
-          hour,
-          timezone: REPORT_TIMEZONE
-        })
-      )
-    );
     return {
       ok: true,
       skipped: true,
@@ -152,41 +109,28 @@ export const executeGenerateStaleReport = async ({
   };
 };
 
-export const runScheduledStaleReport = async () => {
-  try {
-    return await executeGenerateStaleReport({
+export const runScheduledStaleReport = async () =>
+  logger.run('scheduled', { source: 'scheduledTrigger' }, () =>
+    executeGenerateStaleReport({
       source: 'scheduledTrigger',
       enforceScheduleWindow: true
-    });
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('generateStaleReport.run.error', {
-          source: 'scheduledTrigger',
-          message: error?.message
-        })
-      )
-    );
-    throw error;
-  }
-};
+    })
+  );
 
 export const runWebStaleReport = async (event = {}) => {
   try {
-    const result = await executeGenerateStaleReport({
-      source: 'webtrigger',
-      enforceScheduleWindow: false
-    });
-    return toWebResponse(200, result);
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('generateStaleReport.run.error', {
+    return await logger.run(
+      'webtrigger',
+      { source: 'webtrigger', method: event?.method ?? null },
+      async () => {
+        const result = await executeGenerateStaleReport({
           source: 'webtrigger',
-          message: error?.message
-        })
-      )
+          enforceScheduleWindow: false
+        });
+        return toWebResponse(200, result);
+      }
     );
+  } catch (error) {
     return toWebResponse(500, { ok: false, message: error?.message });
   }
 };

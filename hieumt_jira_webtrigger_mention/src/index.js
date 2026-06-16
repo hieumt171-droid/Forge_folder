@@ -1,14 +1,9 @@
 import api, { route } from '@forge/api';
+import { createLogger } from './lib/logger.js';
 
 const ISSUE_KEY_REGEX = /[A-Z]+-\d+/g;
 const MENTION_COMMENT = 'Được mention trong request';
-
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
-});
+const logger = createLogger('mention-webtrigger');
 
 const jsonResponse = (statusCode, payload, extraHeaders = {}) => ({
   statusCode,
@@ -60,15 +55,11 @@ const addMentionComment = async (issueKey) => {
 
   if (!response.ok) {
     const body = await response.text();
-    console.log(
-      JSON.stringify(
-        formatLog('addMentionComment.error', {
-          issueKey,
-          status: response.status,
-          body: body.slice(0, 300)
-        })
-      )
-    );
+    logger.error('addMentionComment', {
+      issueKey,
+      status: response.status,
+      bodyPreview: body.slice(0, 300)
+    });
     throw new Error(`Không comment được ${issueKey}: ${response.status}`);
   }
 
@@ -77,69 +68,42 @@ const addMentionComment = async (issueKey) => {
 
 export async function mentionWebhook(event = {}) {
   const method = String(event?.method ?? 'GET').toUpperCase();
-  const eventType = event?.queryParameters?.event ?? event?.queryStringParameters?.event ?? null;
-
-  console.log(
-    JSON.stringify(
-      formatLog('mentionWebhook.request', {
-        method,
-        eventType,
-        hasBody: Boolean(event?.body)
-      })
-    )
-  );
-
-  if (method !== 'POST') {
-    console.log(JSON.stringify(formatLog('mentionWebhook.reject', { reason: 'method_not_allowed', method })));
-    return jsonResponse(
-      405,
-      { processed: false, error: 'Method Not Allowed. Use POST.' },
-      { Allow: ['POST'] }
-    );
-  }
+  const eventType =
+    event?.queryParameters?.event ?? event?.queryStringParameters?.event ?? null;
 
   try {
-    const payload = parseRequestBody(event?.body);
-    const message = payload?.message ?? '';
-    const author = payload?.author ?? 'unknown';
-    const issuesFound = extractIssueKeys(message);
+    return await logger.run(
+      'mentionWebhook',
+      { method, eventType, hasBody: Boolean(event?.body) },
+      async () => {
+        if (method !== 'POST') {
+          return jsonResponse(
+            405,
+            { processed: false, error: 'Method Not Allowed. Use POST.' },
+            { Allow: ['POST'] }
+          );
+        }
 
-    console.log(
-      JSON.stringify(
-        formatLog('mentionWebhook.parsed', {
-          eventType,
-          author,
-          issuesFound
-        })
-      )
+        const payload = parseRequestBody(event?.body);
+        const message = payload?.message ?? '';
+        const author = payload?.author ?? 'unknown';
+        const issuesFound = extractIssueKeys(message);
+        const commented = [];
+
+        for (const issueKey of issuesFound) {
+          await addMentionComment(issueKey);
+          commented.push(issueKey);
+        }
+
+        return jsonResponse(200, {
+          processed: true,
+          event: eventType,
+          issuesFound: commented,
+          author
+        });
+      }
     );
-
-    const commented = [];
-
-    for (const issueKey of issuesFound) {
-      await addMentionComment(issueKey);
-      commented.push(issueKey);
-    }
-
-    const result = {
-      processed: true,
-      event: eventType,
-      issuesFound: commented,
-      author
-    };
-
-    console.log(JSON.stringify(formatLog('mentionWebhook.success', result)));
-
-    return jsonResponse(200, result);
   } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('mentionWebhook.error', {
-          message: error?.message
-        })
-      )
-    );
-
     return jsonResponse(500, {
       processed: false,
       error: error?.message || 'Internal error'

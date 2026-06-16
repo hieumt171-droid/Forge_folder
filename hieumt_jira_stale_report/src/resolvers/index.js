@@ -1,19 +1,12 @@
 import Resolver from '@forge/resolver';
+import { createLogger } from '../lib/logger.js';
 import { getStoredStaleReport } from '../stale-report';
 
-const formatLog = (event, payload) => ({
-  '@formatLog': true,
-  event,
-  ts: new Date().toISOString(),
-  ...payload
-});
-
+const logger = createLogger('stale-report-resolver');
 const resolver = new Resolver();
 
-resolver.define('getStaleReport', async () => {
-  console.log(JSON.stringify(formatLog('getStaleReport.request', {})));
-
-  try {
+resolver.define('getStaleReport', (req) =>
+  logger.run('getStaleReport', {}, async () => {
     const report = await getStoredStaleReport();
 
     if (!report) {
@@ -28,16 +21,7 @@ resolver.define('getStaleReport', async () => {
       found: true,
       report
     };
-  } catch (error) {
-    console.log(
-      JSON.stringify(
-        formatLog('getStaleReport.error', {
-          message: error?.message
-        })
-      )
-    );
-    throw error;
-  }
-});
+  })
+);
 
 export const handler = resolver.getDefinitions();
