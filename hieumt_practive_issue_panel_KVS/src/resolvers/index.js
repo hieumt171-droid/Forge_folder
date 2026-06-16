@@ -1,6 +1,8 @@
 import Resolver from '@forge/resolver';
 import { kvs } from '@forge/kvs';
 
+const PREFS_VERSION = 2;
+
 const formatLog = (event, payload) => ({
   '@formatLog': true,
   event,
@@ -8,115 +10,157 @@ const formatLog = (event, payload) => ({
   ...payload
 });
 
-const DEFAULT_SETTINGS = {
-  language: 'vi',
+const DEFAULT_V2_PREFS = {
+  theme: 'light',
   showAvatar: true,
-  itemsPerPage: 10
+  locale: 'vi',
+  notifications: true,
+  version: PREFS_VERSION
 };
 
-const buildUserSettingsKey = (accountId) => `user-settings:${accountId}`;
+const buildUserPrefsKey = (accountId) => `user-prefs:${accountId}`;
 
-const resolver = new Resolver();
-
-resolver.define('getUserSettings', async (req) => {
+const requireAccountId = (req) => {
   const accountId = req?.context?.accountId;
   if (!accountId) {
     throw new Error('Không xác định được accountId.');
   }
+  return accountId;
+};
 
-  const key = buildUserSettingsKey(accountId);
-  const stored = await kvs.get(key);
+/** v1 không có field version; v2 có version === 2 */
+const isV1Prefs = (stored) => stored != null && stored.version !== PREFS_VERSION;
 
-  console.log(
-    JSON.stringify(
-      formatLog('getUserSettings', {
-        accountId,
-        key,
-        found: Boolean(stored)
-      })
-    )
-  );
-
+/**
+ * Đọc v1 hoặc v2 từ KVS, luôn trả về object v2 (không ghi đè storage ở đây).
+ */
+const migrateToV2 = (stored) => {
   if (!stored) {
+    return { ...DEFAULT_V2_PREFS };
+  }
+
+  if (!isV1Prefs(stored)) {
     return {
-      settings: { ...DEFAULT_SETTINGS },
-      savedAt: null,
-      isDefault: true
+      theme: stored.theme ?? DEFAULT_V2_PREFS.theme,
+      showAvatar:
+        typeof stored.showAvatar === 'boolean'
+          ? stored.showAvatar
+          : DEFAULT_V2_PREFS.showAvatar,
+      locale: stored.locale ?? DEFAULT_V2_PREFS.locale,
+      notifications:
+        typeof stored.notifications === 'boolean'
+          ? stored.notifications
+          : DEFAULT_V2_PREFS.notifications,
+      version: PREFS_VERSION
     };
   }
 
   return {
-    settings: {
-      language: stored.language ?? DEFAULT_SETTINGS.language,
-      showAvatar:
-        typeof stored.showAvatar === 'boolean' ? stored.showAvatar : DEFAULT_SETTINGS.showAvatar,
-      itemsPerPage: stored.itemsPerPage ?? DEFAULT_SETTINGS.itemsPerPage
-    },
-    savedAt: stored.savedAt ?? null,
-    isDefault: false
+    theme: stored.theme ?? DEFAULT_V2_PREFS.theme,
+    showAvatar:
+      typeof stored.showAvatar === 'boolean'
+        ? stored.showAvatar
+        : DEFAULT_V2_PREFS.showAvatar,
+    locale: DEFAULT_V2_PREFS.locale,
+    notifications: DEFAULT_V2_PREFS.notifications,
+    version: PREFS_VERSION
   };
+};
+
+const normalizeV2ForSave = (payload) => ({
+  theme: String(payload?.theme ?? DEFAULT_V2_PREFS.theme),
+  showAvatar: Boolean(payload?.showAvatar),
+  locale: String(payload?.locale ?? DEFAULT_V2_PREFS.locale),
+  notifications: Boolean(payload?.notifications),
+  version: PREFS_VERSION,
+  savedAt: new Date().toISOString()
 });
 
-resolver.define('saveUserSettings', async (req) => {
-  const accountId = req?.context?.accountId;
-  const { language, showAvatar, itemsPerPage } = req?.payload || {};
+const resolver = new Resolver();
 
-  if (!accountId) {
-    throw new Error('Không xác định được accountId.');
-  }
-
-  const parsedItems = Number(itemsPerPage);
-  if (!Number.isFinite(parsedItems) || parsedItems < 1 || parsedItems > 100) {
-    throw new Error('Số items/trang phải từ 1 đến 100.');
-  }
-
-  const key = buildUserSettingsKey(accountId);
-  const savedAt = new Date().toISOString();
-  const value = {
-    language: String(language || DEFAULT_SETTINGS.language),
-    showAvatar: Boolean(showAvatar),
-    itemsPerPage: parsedItems,
-    savedAt
-  };
+resolver.define('getUserPrefs', async (req) => {
+  const accountId = requireAccountId(req);
+  const key = buildUserPrefsKey(accountId);
+  const stored = await kvs.get(key);
+  const migratedFromV1 = isV1Prefs(stored);
+  const prefs = migrateToV2(stored);
 
   console.log(
     JSON.stringify(
-      formatLog('saveUserSettings.request', {
+      formatLog('getUserPrefs', {
         accountId,
         key,
-        language: value.language,
+        found: Boolean(stored),
+        migratedFromV1,
+        storedVersion: stored?.version ?? 'v1'
+      })
+    )
+  );
+
+  return {
+    prefs,
+    migratedFromV1,
+    isDefault: !stored,
+    savedAt: stored?.savedAt ?? null
+  };
+});
+
+resolver.define('saveUserPrefs', async (req) => {
+  const accountId = requireAccountId(req);
+  const key = buildUserPrefsKey(accountId);
+  const value = normalizeV2ForSave(req?.payload);
+
+  console.log(
+    JSON.stringify(
+      formatLog('saveUserPrefs.request', {
+        accountId,
+        key,
+        theme: value.theme,
         showAvatar: value.showAvatar,
-        itemsPerPage: value.itemsPerPage
+        locale: value.locale,
+        notifications: value.notifications,
+        version: value.version
       })
     )
   );
 
   await kvs.set(key, value);
 
-  console.log(JSON.stringify(formatLog('saveUserSettings.success', { key, savedAt })));
+  console.log(JSON.stringify(formatLog('saveUserPrefs.success', { key, savedAt: value.savedAt })));
 
-  return { success: true, savedAt, settings: value };
+  return { success: true, prefs: value, savedAt: value.savedAt };
 });
 
-resolver.define('resetUserSettings', async (req) => {
-  const accountId = req?.context?.accountId;
-  if (!accountId) {
-    throw new Error('Không xác định được accountId.');
-  }
+/** Chỉ dùng khi test: ghi thẳng v1 data vào KVS (không có version). */
+resolver.define('seedV1UserPrefs', async (req) => {
+  const accountId = requireAccountId(req);
+  const key = buildUserPrefsKey(accountId);
+  const theme = String(req?.payload?.theme ?? 'dark');
+  const showAvatar =
+    typeof req?.payload?.showAvatar === 'boolean'
+      ? req.payload.showAvatar
+      : true;
 
-  const key = buildUserSettingsKey(accountId);
+  const v1Value = { theme, showAvatar };
 
-  console.log(JSON.stringify(formatLog('resetUserSettings.request', { accountId, key })));
+  await kvs.set(key, v1Value);
+
+  console.log(
+    JSON.stringify(formatLog('seedV1UserPrefs', { accountId, key, v1Value }))
+  );
+
+  return { success: true, seeded: v1Value };
+});
+
+resolver.define('resetUserPrefs', async (req) => {
+  const accountId = requireAccountId(req);
+  const key = buildUserPrefsKey(accountId);
 
   await kvs.delete(key);
 
-  console.log(JSON.stringify(formatLog('resetUserSettings.success', { key })));
+  console.log(JSON.stringify(formatLog('resetUserPrefs', { accountId, key })));
 
-  return {
-    success: true,
-    settings: { ...DEFAULT_SETTINGS },
-    savedAt: null
-  };
+  return { success: true, prefs: { ...DEFAULT_V2_PREFS }, savedAt: null };
 });
 
 export const handler = resolver.getDefinitions();

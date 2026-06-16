@@ -171,14 +171,14 @@ const MyBookmarksTab = ({ refreshToken }) => {
     setLoading(true);
     setError('');
     try {
-      const data = await invoke('listMyBookmarks');
+      const data = await invoke('getMyBookmarks');
       setBookmarks(Array.isArray(data?.bookmarks) ? data.bookmarks : []);
-      console.log(JSON.stringify(formatLog('listMyBookmarks.ui.success', {})));
+      console.log(JSON.stringify(formatLog('getMyBookmarks.ui.success', {})));
     } catch (e) {
       const message = e?.message || String(e);
       setError(message);
       setBookmarks([]);
-      console.log(JSON.stringify(formatLog('listMyBookmarks.ui.error', { message })));
+      console.log(JSON.stringify(formatLog('getMyBookmarks.ui.error', { message })));
     } finally {
       setLoading(false);
     }
@@ -302,6 +302,81 @@ const MyBookmarksTab = ({ refreshToken }) => {
   );
 };
 
+const ValidationTestPanel = ({ issueKey }) => {
+  const [running, setRunning] = useState('');
+  const [result, setResult] = useState(null);
+
+  const runTest = useCallback(async (testId, label, fn) => {
+    setRunning(testId);
+    setResult(null);
+    try {
+      const data = await fn();
+      setResult({
+        type: 'error',
+        title: 'Không mong đợi thành công',
+        message: `${label}: resolver không throw — ${JSON.stringify(data)}`
+      });
+    } catch (e) {
+      const message = e?.message || String(e);
+      setResult({ type: 'success', title: 'Validation chặn đúng', message: `${label}: ${message}` });
+      console.log(JSON.stringify(formatLog('validationTest.rejected', { testId, message })));
+    } finally {
+      setRunning('');
+    }
+  }, []);
+
+  return (
+    <Stack space="space.200">
+      <Text>Bấm từng nút — kỳ vọng hiện error message rõ ràng (không thay đổi bookmark thật).</Text>
+
+      <LoadingButton
+        appearance="default"
+        isLoading={running === 'issueKey'}
+        onClick={() =>
+          runTest('issueKey', 'toggleBookmark issueKey sai', () =>
+            invoke('toggleBookmark', { issueKey: 'hsf-1' })
+          )
+        }
+      >
+        Test issueKey sai (hsf-1)
+      </LoadingButton>
+
+      <LoadingButton
+        appearance="default"
+        isLoading={running === 'cursor'}
+        onClick={() =>
+          runTest('cursor', 'getMyBookmarks cursor sai', () =>
+            invoke('getMyBookmarks', { cursor: 123 })
+          )
+        }
+      >
+        Test cursor sai (number)
+      </LoadingButton>
+
+      <LoadingButton
+        appearance="default"
+        isLoading={running === 'auth'}
+        onClick={() =>
+          runTest('auth', 'removeBookmark user khác', () =>
+            invoke('removeBookmark', {
+              issueKey: issueKey || 'HSF-1',
+              accountId: 'fake-user-khac-12345'
+            })
+          )
+        }
+      >
+        Test xóa bookmark user khác
+      </LoadingButton>
+
+      {result ? (
+        <SectionMessage appearance={result.type === 'success' ? 'success' : 'error'} title={result.title}>
+          <Text>{result.message}</Text>
+        </SectionMessage>
+      ) : null}
+    </Stack>
+  );
+};
+
 const App = () => {
   const context = useProductContext();
   const issueKey = context?.extension?.issue?.key ?? '';
@@ -326,12 +401,16 @@ const App = () => {
         <TabList>
           <Tab>Issue này</Tab>
           <Tab>Bookmarks của tôi</Tab>
+          <Tab>Test validation</Tab>
         </TabList>
         <TabPanel>
           <IssueTab issueKey={issueKey} onBookmarksChanged={bumpListRefresh} />
         </TabPanel>
         <TabPanel>
           <MyBookmarksTab refreshToken={listRefreshToken} />
+        </TabPanel>
+        <TabPanel>
+          <ValidationTestPanel issueKey={issueKey} />
         </TabPanel>
       </Tabs>
     </Stack>

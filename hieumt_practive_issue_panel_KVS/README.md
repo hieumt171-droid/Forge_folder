@@ -1,39 +1,34 @@
-# Forge Hello World
+# User Preferences — KVS schema migration (v1 → v2)
 
-This project contains a Forge app written in Javascript that displays `Hello World!` in a Jira issue panel. 
+## Schema
 
-See [developer.atlassian.com/platform/forge/](https://developer.atlassian.com/platform/forge) for documentation and tutorials explaining Forge.
+| Version | Format |
+|---------|--------|
+| **v1** | `{ theme, showAvatar }` — không có `version` |
+| **v2** | `{ theme, showAvatar, locale, notifications, version: 2 }` |
 
-## Requirements
+KVS key: `user-prefs:{accountId}`
 
-See [Set up Forge](https://developer.atlassian.com/platform/forge/set-up-forge/) for instructions to get set up.
+## Resolvers
 
-## Quick start
+- `getUserPrefs` — đọc v1/v2, luôn trả về v2 (migrate in-memory)
+- `saveUserPrefs` — luôn ghi v2
+- `seedV1UserPrefs` — ghi v1 thủ công để test migrate
+- `resetUserPrefs` — xóa key
 
-- Modify your app frontend by editing the `src/frontend/index.jsx` file.
+## Test migrate
 
-- Modify your app backend by editing the `src/resolvers/index.js` file to define resolver functions. See [Forge resolvers](https://developer.atlassian.com/platform/forge/runtime-reference/custom-ui-resolver/) for documentation on resolver functions.
+1. `forge tunnel` hoặc deploy + mở panel **Cài đặt Cá nhân**
+2. Bấm **Seed v1 (test)** → KVS chỉ có `{ theme: "dark", showAvatar: true }`
+3. Reload panel → banner **"Đã migrate từ v1"**, form hiện:
+   - theme: `dark`, showAvatar: `true` (giữ cũ)
+   - locale: `vi`, notifications: `true` (default mới)
+4. Bấm **Lưu (v2)** → `forge logs` thấy `version: 2`
+5. Reload → không còn banner migrate; theme/showAvatar vẫn `dark` / `true`
 
-- Build and deploy your app by running:
+## Deploy
+
+```bash
+cd hieumt_practive_issue_panel_KVS
+forge deploy --non-interactive -e development
 ```
-forge deploy
-```
-
-- Install your app in an Atlassian site by running:
-```
-forge install
-```
-
-- Develop your app by running `forge tunnel` to proxy invocations locally:
-```
-forge tunnel
-```
-
-### Notes
-- Use the `forge deploy` command when you want to persist code changes.
-- Use the `forge install` command when you want to install the app on a new site.
-- Once the app is installed on a site, the site picks up the new app changes you deploy without needing to rerun the install command.
-
-## Support
-
-See [Get help](https://developer.atlassian.com/platform/forge/get-help/) for how to get help and provide feedback.

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ForgeReconciler, {
+  Button,
   ButtonGroup,
   Checkbox,
   Form,
   FormFooter,
   FormHeader,
   FormSection,
-  HelperMessage,
   Label,
   LoadingButton,
   SectionMessage,
@@ -14,7 +14,6 @@ import ForgeReconciler, {
   Spinner,
   Stack,
   Text,
-  Textfield,
   useProductContext
 } from '@forge/react';
 import { invoke } from '@forge/bridge';
@@ -26,16 +25,22 @@ const formatLog = (event, payload) => ({
   ...payload
 });
 
-const LANGUAGE_OPTIONS = [
-  { label: 'Tiếng Việt', value: 'vi' },
-  { label: 'English', value: 'en' },
-  { label: '日本語', value: 'ja' }
+const THEME_OPTIONS = [
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' }
 ];
 
-const DEFAULT_SETTINGS = {
-  language: 'vi',
+const LOCALE_OPTIONS = [
+  { label: 'Tiếng Việt', value: 'vi' },
+  { label: 'English', value: 'en' }
+];
+
+const DEFAULT_PREFS = {
+  theme: 'light',
   showAvatar: true,
-  itemsPerPage: '10'
+  locale: 'vi',
+  notifications: true,
+  version: 2
 };
 
 const formatSavedAt = (iso) => {
@@ -50,114 +55,134 @@ const formatSavedAt = (iso) => {
 const App = () => {
   const context = useProductContext();
   const accountId = context?.accountId || '—';
-  const storageKey = `user-settings:${accountId}`;
+  const storageKey = `user-prefs:${accountId}`;
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [savedAt, setSavedAt] = useState(null);
+  const [migratedFromV1, setMigratedFromV1] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [actionInfo, setActionInfo] = useState('');
   const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
-  const [language, setLanguage] = useState(DEFAULT_SETTINGS.language);
-  const [showAvatar, setShowAvatar] = useState(DEFAULT_SETTINGS.showAvatar);
-  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_SETTINGS.itemsPerPage);
+  const [theme, setTheme] = useState(DEFAULT_PREFS.theme);
+  const [showAvatar, setShowAvatar] = useState(DEFAULT_PREFS.showAvatar);
+  const [locale, setLocale] = useState(DEFAULT_PREFS.locale);
+  const [notifications, setNotifications] = useState(DEFAULT_PREFS.notifications);
 
-  const applySettings = useCallback((settings, nextSavedAt) => {
-    setLanguage(settings.language ?? DEFAULT_SETTINGS.language);
+  const applyPrefs = useCallback((prefs, meta = {}) => {
+    setTheme(prefs.theme ?? DEFAULT_PREFS.theme);
     setShowAvatar(
-      typeof settings.showAvatar === 'boolean' ? settings.showAvatar : DEFAULT_SETTINGS.showAvatar
+      typeof prefs.showAvatar === 'boolean' ? prefs.showAvatar : DEFAULT_PREFS.showAvatar
     );
-    setItemsPerPage(String(settings.itemsPerPage ?? DEFAULT_SETTINGS.itemsPerPage));
-    setSavedAt(nextSavedAt ?? null);
+    setLocale(prefs.locale ?? DEFAULT_PREFS.locale);
+    setNotifications(
+      typeof prefs.notifications === 'boolean' ? prefs.notifications : DEFAULT_PREFS.notifications
+    );
+    setSavedAt(meta.savedAt ?? null);
+    setMigratedFromV1(Boolean(meta.migratedFromV1));
   }, []);
 
-  const loadSettings = useCallback(async () => {
+  const loadPrefs = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const res = await invoke('getUserSettings');
-      const settings = res?.settings || DEFAULT_SETTINGS;
-
-      applySettings(settings, res?.savedAt ?? null);
-
+      const res = await invoke('getUserPrefs');
+      applyPrefs(res?.prefs || DEFAULT_PREFS, {
+        savedAt: res?.savedAt ?? null,
+        migratedFromV1: res?.migratedFromV1
+      });
       console.log(
         JSON.stringify(
-          formatLog('getUserSettings.ui.success', {
-            isDefault: Boolean(res?.isDefault),
-            savedAt: res?.savedAt ?? null
+          formatLog('getUserPrefs.ui.success', {
+            migratedFromV1: Boolean(res?.migratedFromV1),
+            version: res?.prefs?.version
           })
         )
       );
     } catch (e) {
       const message = e?.message || String(e);
       setLoadError(message);
-      console.log(JSON.stringify(formatLog('getUserSettings.ui.error', { message })));
+      console.log(JSON.stringify(formatLog('getUserPrefs.ui.error', { message })));
     } finally {
       setLoading(false);
     }
-  }, [applySettings]);
+  }, [applyPrefs]);
 
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    loadPrefs();
+  }, [loadPrefs]);
 
-  const selectedLanguage = useMemo(
-    () => LANGUAGE_OPTIONS.find((opt) => opt.value === language) || LANGUAGE_OPTIONS[0],
-    [language]
+  const selectedTheme = useMemo(
+    () => THEME_OPTIONS.find((opt) => opt.value === theme) || THEME_OPTIONS[0],
+    [theme]
+  );
+
+  const selectedLocale = useMemo(
+    () => LOCALE_OPTIONS.find((opt) => opt.value === locale) || LOCALE_OPTIONS[0],
+    [locale]
   );
 
   const onSave = useCallback(async () => {
     setActionError('');
-
-    const parsedItems = Number(itemsPerPage);
-    if (!Number.isFinite(parsedItems) || parsedItems < 1 || parsedItems > 100) {
-      setActionError('Số items/trang phải từ 1 đến 100.');
-      return;
-    }
-
+    setActionInfo('');
     setSaving(true);
     try {
-      const res = await invoke('saveUserSettings', {
-        language,
+      const res = await invoke('saveUserPrefs', {
+        theme,
         showAvatar,
-        itemsPerPage: parsedItems
+        locale,
+        notifications
       });
-
       setSavedAt(res?.savedAt ?? null);
-      console.log(JSON.stringify(formatLog('saveUserSettings.ui.success', { savedAt: res?.savedAt })));
+      setMigratedFromV1(false);
+      setActionInfo('Đã lưu v2 — theme/showAvatar cũ được giữ nguyên.');
+      console.log(JSON.stringify(formatLog('saveUserPrefs.ui.success', { version: 2 })));
     } catch (e) {
       const message = e?.message || String(e);
       setActionError(message);
-      console.log(JSON.stringify(formatLog('saveUserSettings.ui.error', { message })));
+      console.log(JSON.stringify(formatLog('saveUserPrefs.ui.error', { message })));
     } finally {
       setSaving(false);
     }
-  }, [language, showAvatar, itemsPerPage]);
+  }, [theme, showAvatar, locale, notifications]);
 
-  const onReset = useCallback(async () => {
+  const onSeedV1 = useCallback(async () => {
     setActionError('');
-    setResetting(true);
+    setActionInfo('');
+    setSeeding(true);
     try {
-      await invoke('resetUserSettings');
-      applySettings(DEFAULT_SETTINGS, null);
-      console.log(JSON.stringify(formatLog('resetUserSettings.ui.success', {})));
+      await invoke('seedV1UserPrefs', { theme: 'dark', showAvatar: true });
+      await loadPrefs();
+      setActionInfo('Đã seed v1: { theme: "dark", showAvatar: true } — reload để xem migrate.');
+      console.log(JSON.stringify(formatLog('seedV1UserPrefs.ui.success', {})));
     } catch (e) {
       const message = e?.message || String(e);
       setActionError(message);
-      console.log(JSON.stringify(formatLog('resetUserSettings.ui.error', { message })));
     } finally {
-      setResetting(false);
+      setSeeding(false);
     }
-  }, [applySettings]);
+  }, [loadPrefs]);
+
+  const onReset = useCallback(async () => {
+    setActionError('');
+    setActionInfo('');
+    try {
+      await invoke('resetUserPrefs');
+      applyPrefs(DEFAULT_PREFS, { savedAt: null, migratedFromV1: false });
+    } catch (e) {
+      setActionError(e?.message || String(e));
+    }
+  }, [applyPrefs]);
 
   if (loading) {
-    return <Spinner label="Đang tải cài đặt..." />;
+    return <Spinner label="Đang tải preferences..." />;
   }
 
   if (loadError) {
     return (
-      <SectionMessage appearance="error" title="Không tải được cài đặt">
+      <SectionMessage appearance="error" title="Không tải được preferences">
         <Text>{loadError}</Text>
       </SectionMessage>
     );
@@ -166,12 +191,26 @@ const App = () => {
   return (
     <Form>
       <Stack space="space.200">
-        <FormHeader title="Cài đặt Cá nhân" />
-        <Text>Preferences lưu theo user — key: {storageKey}</Text>
+        <FormHeader title="User Preferences (v2)" />
+        <Text>KVS key: {storageKey}</Text>
+
+        {migratedFromV1 ? (
+          <SectionMessage appearance="information" title="Đã migrate từ v1">
+            <Text>
+              Đọc được data cũ (không có version). locale/notifications dùng default: vi / true.
+            </Text>
+          </SectionMessage>
+        ) : null}
 
         {savedAt ? (
           <SectionMessage appearance="success">
-            <Text>Đã lưu lúc {formatSavedAt(savedAt)}</Text>
+            <Text>Đã lưu lúc {formatSavedAt(savedAt)} — schema v2</Text>
+          </SectionMessage>
+        ) : null}
+
+        {actionInfo ? (
+          <SectionMessage appearance="information">
+            <Text>{actionInfo}</Text>
           </SectionMessage>
         ) : null}
 
@@ -183,52 +222,47 @@ const App = () => {
 
         <FormSection>
           <Stack space="space.150">
-            <Label labelFor="language-select">Ngôn ngữ ưa thích</Label>
+            <Label labelFor="theme-select">Theme</Label>
             <Select
-              id="language-select"
-              options={LANGUAGE_OPTIONS}
-              value={selectedLanguage}
-              onChange={(option) => {
-                setLanguage(option?.value ?? DEFAULT_SETTINGS.language);
-              }}
+              id="theme-select"
+              options={THEME_OPTIONS}
+              value={selectedTheme}
+              onChange={(option) => setTheme(option?.value ?? DEFAULT_PREFS.theme)}
             />
 
             <Checkbox
               label="Hiển thị avatar"
               isChecked={showAvatar}
-              onChange={(value) => {
-                setShowAvatar(Boolean(value));
-              }}
+              onChange={(value) => setShowAvatar(Boolean(value))}
             />
 
-            <Label labelFor="items-per-page">Số items/trang</Label>
-            <Textfield
-              id="items-per-page"
-              type="number"
-              value={itemsPerPage}
-              onChange={(event) => {
-                setItemsPerPage(String(event?.target?.value ?? event?.value ?? ''));
-              }}
+            <Label labelFor="locale-select">Locale</Label>
+            <Select
+              id="locale-select"
+              options={LOCALE_OPTIONS}
+              value={selectedLocale}
+              onChange={(option) => setLocale(option?.value ?? DEFAULT_PREFS.locale)}
             />
-            <HelperMessage>Nhập từ 1 đến 100</HelperMessage>
+
+            <Checkbox
+              label="Bật notifications"
+              isChecked={notifications}
+              onChange={(value) => setNotifications(Boolean(value))}
+            />
           </Stack>
         </FormSection>
 
         <FormFooter>
           <ButtonGroup>
             <LoadingButton appearance="primary" isLoading={saving} onClick={onSave}>
-              Lưu
+              Lưu (v2)
             </LoadingButton>
-            <LoadingButton
-              appearance="subtle"
-              isLoading={resetting}
-              onClick={(event) => {
-                event?.preventDefault?.();
-                onReset();
-              }}
-            >
-              Reset về mặc định
+            <LoadingButton appearance="default" isLoading={seeding} onClick={onSeedV1}>
+              Seed v1 (test)
             </LoadingButton>
+            <Button appearance="subtle" onClick={onReset}>
+              Reset
+            </Button>
           </ButtonGroup>
         </FormFooter>
       </Stack>
