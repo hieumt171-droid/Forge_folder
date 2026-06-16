@@ -1,0 +1,116 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'hieumt_issue_panel_bookmark_manager/**'
+      - '.github/workflows/cd.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Forge environment to deploy'
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  APP_DIR: hieumt_issue_panel_bookmark_manager
+  FORGE_SITE: hieumt-forge-resource.atlassian.net
+  FORGE_PRODUCT: jira
+
+defaults:
+  run:
+    working-directory: hieumt_issue_panel_bookmark_manager
+
+jobs:
+  deploy-staging:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Forge CLI
+        run: npm install -g @forge/cli@12
+
+      - name: Configure Forge CLI
+        run: forge settings set usage-analytics true
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Deploy to Forge staging
+        run: forge deploy --non-interactive -e staging
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Upgrade install on site (staging)
+        run: >
+          forge install --non-interactive --upgrade
+          --site ${{ env.FORGE_SITE }}
+          --product ${{ env.FORGE_PRODUCT }}
+          -e staging
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+  deploy-production:
+    needs: deploy-staging
+    if: |
+      always() && (
+        (github.event_name == 'push' && needs.deploy-staging.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Forge CLI
+        run: npm install -g @forge/cli@12
+
+      - name: Configure Forge CLI
+        run: forge settings set usage-analytics true
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Deploy to Forge production
+        run: forge deploy --non-interactive -e production
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Upgrade install on site (production)
+        run: >
+          forge install --non-interactive --upgrade
+          --site ${{ env.FORGE_SITE }}
+          --product ${{ env.FORGE_PRODUCT }}
+          -e production
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}

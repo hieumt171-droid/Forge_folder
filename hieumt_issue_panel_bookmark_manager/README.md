@@ -51,6 +51,35 @@ npm run test
 npm run build:frontend
 ```
 
+## CD (GitHub Actions)
+
+Workflow: `.github/workflows/cd.yml`
+
+| Trigger | Hành vi |
+|---------|---------|
+| Merge/push `main` | Auto deploy **staging** → chờ approve **production** |
+| Manual `workflow_dispatch` | Chọn staging hoặc production |
+
+### GitHub Secrets (Settings → Secrets → Actions)
+
+| Secret | Giá trị |
+|--------|---------|
+| `HIEUMT_GITHUB` | Atlassian API token (scoped) |
+| `FORGE_EMAIL` | Email tài khoản Atlassian sở hữu app |
+
+### GitHub Environments (Settings → Environments)
+
+1. **staging** — không bắt buộc reviewer
+2. **production** — bật **Required reviewers** (chọn 1+ người)
+
+### Test CD
+
+1. Merge PR vào `main` (có thay đổi `hieumt_issue_panel_bookmark_manager/`)
+2. **Actions** → workflow **CD** → job `deploy-staging` chạy xong
+3. Job `deploy-production` chờ **Review deployments** → Approve
+4. Verify: `forge install list` hoặc mở panel Bookmarks trên Jira
+
+## Deploy thủ công (development)
 
 ```bash
 npm install
