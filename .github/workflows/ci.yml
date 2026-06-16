@@ -6,11 +6,10 @@ on:
       - 'hieumt_issue_panel_bookmark_manager/**'
       - '.github/workflows/ci.yml'
   push:
-    branches:
-      - main
     paths:
       - 'hieumt_issue_panel_bookmark_manager/**'
       - '.github/workflows/ci.yml'
+  workflow_dispatch:
 
 defaults:
   run:
