@@ -6,6 +6,8 @@ on:
       - 'hieumt_issue_panel_bookmark_manager/**'
       - '.github/workflows/ci.yml'
   push:
+    branches:
+      - main
     paths:
       - 'hieumt_issue_panel_bookmark_manager/**'
       - '.github/workflows/ci.yml'
@@ -26,8 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: hieumt_issue_panel_bookmark_manager/package-lock.json
 
       - name: Install
         run: npm ci
