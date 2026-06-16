@@ -41,7 +41,16 @@ Payload invalid — kỳ vọng error message rõ:
 - `storage:app`
 - `read:jira-work`
 
-## Deploy
+## CI (GitHub Actions)
+
+Workflow: `.github/workflows/ci.yml` — install → lint → test → build frontend
+
+```bash
+npm run lint
+npm run test
+npm run build:frontend
+```
+
 
 ```bash
 npm install

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - 'hieumt_issue_panel_bookmark_manager/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'hieumt_issue_panel_bookmark_manager/**'
+      - '.github/workflows/ci.yml'
+
+defaults:
+  run:
+    working-directory: hieumt_issue_panel_bookmark_manager
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: hieumt_issue_panel_bookmark_manager/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build frontend
+        run: npm run build:frontend
