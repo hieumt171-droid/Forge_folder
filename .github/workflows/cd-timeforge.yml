@@ -1,0 +1,147 @@
+name: CD TimeForge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'timeforge/**'
+      - '.github/workflows/cd-timeforge.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Forge environment to deploy'
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  APP_DIR: timeforge
+  FORGE_SITE: hieumt-forge-resource.atlassian.net
+  FORGE_PRODUCT: jira
+
+defaults:
+  run:
+    working-directory: timeforge
+
+jobs:
+  # ── CI gate ──────────────────────────────────────────────────────────
+  ci:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: timeforge/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+  # ── Deploy staging ────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → staging
+    needs: ci
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: timeforge/package-lock.json
+
+      - name: Install app
+        run: npm ci
+
+      - name: Install Forge CLI
+        run: npm install -g @forge/cli@latest
+        working-directory: .
+
+      - name: Forge settings
+        run: forge settings set usage-analytics true
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Deploy to staging
+        run: forge deploy --non-interactive -e staging
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Upgrade install on staging
+        run: >
+          forge install --non-interactive --upgrade
+          --site ${{ env.FORGE_SITE }}
+          --product ${{ env.FORGE_PRODUCT }}
+          -e staging
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+  # ── Deploy production (needs staging success + manual approval) ───────
+  deploy-production:
+    name: Deploy → production
+    needs: deploy-staging
+    if: |
+      always() && (
+        (github.event_name == 'push' && needs.deploy-staging.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+      )
+    runs-on: ubuntu-latest
+    environment: production          # <── đặt Required reviewers trong Settings
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: timeforge/package-lock.json
+
+      - name: Install app
+        run: npm ci
+
+      - name: Install Forge CLI
+        run: npm install -g @forge/cli@latest
+        working-directory: .
+
+      - name: Forge settings
+        run: forge settings set usage-analytics true
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Deploy to production
+        run: forge deploy --non-interactive -e production
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
+
+      - name: Upgrade install on production
+        run: >
+          forge install --non-interactive --upgrade
+          --site ${{ env.FORGE_SITE }}
+          --product ${{ env.FORGE_PRODUCT }}
+          -e production
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}

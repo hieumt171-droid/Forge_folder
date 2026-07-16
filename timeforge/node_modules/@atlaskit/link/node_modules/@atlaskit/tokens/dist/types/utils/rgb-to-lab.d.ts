@@ -1,0 +1,1 @@
+export declare function rgbToLab(rgb: number[]): [number, number, number];

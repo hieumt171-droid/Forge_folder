@@ -1,0 +1,9 @@
+import type tokens from '../artifacts/token-names';
+import { type CSSColor, type ThemeColorModes } from '../theme-config';
+type Token = keyof typeof tokens;
+type TokenMap = {
+    [key in Token]?: number | string;
+};
+type Mode = 'light' | 'dark';
+export declare const generateTokenMapWithContrastCheck: (brandColor: CSSColor, mode: ThemeColorModes, themeRamp?: CSSColor[]) => { [mode in Mode]?: TokenMap; };
+export {};

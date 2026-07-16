@@ -1,0 +1,1 @@
+export const isValidBrandHex = hex => /^#[0-9A-F]{6}$/i.test(hex);

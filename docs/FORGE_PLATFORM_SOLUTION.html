@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge Platform Solution — Jira Cloud, Multi-site</title>
+  <style>
+    :root {
+      --bg: #f4f6f9; --card: #fff; --text: #172b4d; --muted: #5e6c84;
+      --accent: #0052cc; --accent-light: #deebff; --success: #00875a;
+      --success-light: #e3fcef; --warning: #ff8b00; --warning-light: #fffae6;
+      --danger: #de350b; --danger-light: #ffebe6; --border: #dfe1e6;
+      --code-bg: #1e1e2e; --code-text: #cdd6f4; --sidebar-w: 284px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; font-size: 15px; }
+    .layout { display: flex; min-height: 100vh; }
+
+    nav.toc { position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh; overflow-y: auto; background: #0747a6; color: #fff; padding: 20px 14px; font-size: 12px; z-index: 100; }
+    nav.toc .brand { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
+    nav.toc .subtitle { font-size: 10.5px; opacity: 0.72; margin-bottom: 16px; line-height: 1.5; }
+    nav.toc a { display: block; color: rgba(255,255,255,0.82); text-decoration: none; padding: 5px 10px; border-radius: 6px; margin-bottom: 1px; }
+    nav.toc a:hover { background: rgba(255,255,255,0.13); color: #fff; }
+    nav.toc a.sub { padding-left: 22px; font-size: 11px; opacity: 0.85; }
+    nav.toc .sep { border-top: 1px solid rgba(255,255,255,0.15); margin: 8px 0; }
+    nav.toc a.highlight { background: rgba(255,255,255,0.18); font-weight: 600; color: #fff; }
+
+    main { margin-left: var(--sidebar-w); flex: 1; padding: 30px 46px 90px; max-width: 1080px; }
+
+    .hero { background: linear-gradient(135deg, #0052cc 0%, #0747a6 55%, #172b4d 100%); color: #fff; border-radius: 16px; padding: 38px 42px; margin-bottom: 28px; }
+    .hero h1 { margin: 0 0 8px; font-size: 1.9rem; letter-spacing: -0.02em; }
+    .hero .tagline { font-size: 1.02rem; opacity: 0.9; margin-bottom: 18px; max-width: 620px; line-height: 1.6; }
+    .badge { display: inline-block; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.28); border-radius: 20px; padding: 4px 12px; font-size: 11px; margin: 3px 4px 3px 0; }
+    .badge.green { background: rgba(0,135,90,0.3); border-color: rgba(0,200,130,0.4); }
+
+    section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 26px 32px; margin-bottom: 22px; scroll-margin-top: 18px; }
+    section h2 { margin: 0 0 8px; font-size: 1.35rem; color: var(--accent); border-bottom: 2px solid var(--accent-light); padding-bottom: 9px; }
+    section h3 { margin: 24px 0 10px; font-size: 1.06rem; color: #253858; }
+    section h4 { margin: 16px 0 7px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+    p { margin: 0 0 10px; }
+
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 13.5px; }
+    th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
+    th { background: var(--accent-light); color: var(--accent); font-weight: 600; font-size: 12.5px; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    td code { font-size: 12px; }
+
+    .box { border-left: 4px solid var(--accent); background: var(--accent-light); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .box.success { border-color: var(--success); background: var(--success-light); }
+    .box.warning { border-color: var(--warning); background: var(--warning-light); }
+    .box.danger  { border-color: var(--danger);  background: var(--danger-light); }
+    .box strong { display: block; margin-bottom: 5px; font-size: 13.5px; }
+    .box p { margin-bottom: 5px; }
+    .box p:last-child { margin-bottom: 0; }
+
+    code { background: #ebecf0; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; font-family: Consolas, "Cascadia Code", monospace; }
+    pre { background: var(--code-bg); color: var(--code-text); padding: 15px 18px; border-radius: 10px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 10px 0 16px; }
+    pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+    ul, ol { margin: 6px 0 14px; padding-left: 22px; }
+    li { margin-bottom: 5px; }
+
+    .diagram { background: #fafbfc; border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 14px 0; overflow-x: auto; }
+    .diagram-label { font-size: 11.5px; color: var(--muted); text-align: center; margin-bottom: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 7px 0; }
+    .flow-box { background: #fff; border: 2px solid var(--accent); border-radius: 8px; padding: 9px 16px; font-size: 12.5px; font-weight: 600; text-align: center; min-width: 110px; }
+    .flow-box.storage { border-color: var(--success); color: var(--success); }
+    .flow-box.neutral { border-color: var(--muted); color: var(--muted); }
+    .flow-arrow { font-size: 20px; color: var(--muted); }
+
+    .phase-card { border: 2px solid var(--accent); border-radius: 12px; margin: 18px 0; overflow: hidden; }
+    .phase-header { background: var(--accent); color: #fff; padding: 12px 20px; font-weight: 700; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .phase-header .tag { background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+    .phase-body { padding: 18px 20px; background: #fafbfc; }
+
+    .risk-high { background: #ffebe6 !important; }
+    .risk-med  { background: var(--warning-light) !important; }
+    .risk-low  { background: var(--success-light) !important; }
+
+    .checklist { list-style: none; padding-left: 0; }
+    .checklist li { padding: 5px 0 5px 28px; position: relative; border-bottom: 1px solid #f0f2f5; }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before { content: "☐"; position: absolute; left: 0; color: var(--accent); font-weight: bold; font-size: 15px; line-height: 1.5; }
+
+    .tag-missing { display: inline-block; background: var(--danger-light); color: var(--danger); border: 1px solid #ffc1b3; border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; margin-left: 5px; }
+    .tag-needed  { display: inline-block; background: var(--warning-light); color: #7a4600; border: 1px solid #ffe0a0; border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; margin-left: 5px; }
+    .tag-ok      { display: inline-block; background: var(--success-light); color: var(--success); border: 1px solid #9de8c4; border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; margin-left: 5px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+    .col-box { background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .col-box h4 { margin-top: 0; }
+
+    @media print { nav.toc { display: none; } main { margin-left: 0; padding: 20px; } }
+    @media (max-width: 940px) { nav.toc { display: none; } main { margin-left: 0; padding: 16px; } .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ════════ SIDEBAR ════════ -->
+<nav class="toc">
+  <div class="brand">⚙️ Forge Platform</div>
+  <div class="subtitle">Solution Architecture<br/>Jira Cloud · Multi-site<br/>Forge SQL · Jun 2026</div>
+
+  <a href="#s1">1. Executive Summary</a>
+  <a href="#s1-1" class="sub">Bài toán kinh doanh</a>
+  <a href="#s1-2" class="sub">Giải pháp đề xuất</a>
+  <a href="#s1-3" class="sub">Lợi ích & Scope</a>
+
+  <div class="sep"></div>
+  <a href="#s2">2. Bối cảnh & Yêu cầu</a>
+  <a href="#s2-1" class="sub">Context & môi trường</a>
+  <a href="#s2-2" class="sub">Functional Requirements</a>
+  <a href="#s2-3" class="sub">Non-functional Req.</a>
+  <a href="#s2-4" class="sub">Forge Constraints</a>
+
+  <div class="sep"></div>
+  <a href="#s3">3. Solution Overview</a>
+  <a href="#s3-1" class="sub">Kiến trúc tổng quan</a>
+  <a href="#s3-2" class="sub">Tại sao Forge?</a>
+  <a href="#s3-3" class="sub">Single app — Multi-site</a>
+  <a href="#s3-4" class="sub">Luồng tương tác chính</a>
+  <a href="#s3-5" class="sub">Components map</a>
+
+  <div class="sep"></div>
+  <a href="#s4">4. Thiết kế kỹ thuật</a>
+  <a href="#s4-1" class="sub">Manifest & modules</a>
+  <a href="#s4-2" class="sub">Data model & SQL</a>
+  <a href="#s4-3" class="sub">Resolver API</a>
+  <a href="#s4-4" class="sub highlight">timeTrackingProvider & issueAction</a>
+  <a href="#s4-5" class="sub">Permission & Security</a>
+  <a href="#s4-6" class="sub">Config per site</a>
+  <a href="#s4-7" class="sub">Error handling & Logging</a>
+
+  <div class="sep"></div>
+  <a href="#s5">5. Multi-site & Scalability</a>
+  <a href="#s6">6. Deployment & CI/CD</a>
+  <a href="#s7">7. Observability</a>
+  <a href="#s8" class="highlight">8. Rủi ro & Giảm thiểu</a>
+  <a href="#s9">9. Roadmap</a>
+  <a href="#s10">10. Gaps & Checklist</a>
+</nav>
+
+<!-- ════════ MAIN ════════ -->
+<main>
+
+<div class="hero">
+  <h1>⚙️ Forge Platform Solution</h1>
+  <div class="tagline">Kiến trúc giải pháp Atlassian Forge App — Jira Cloud, Multi-site, Forge SQL. Không host riêng. Không DevOps. Production-ready từ tuần đầu.</div>
+  <span class="badge">Jira Cloud only</span>
+  <span class="badge green">Forge Node.js 24.x</span>
+  <span class="badge green">Forge SQL (MySQL)</span>
+  <span class="badge">Multi-site isolation</span>
+  <span class="badge">jira:timeTrackingProvider</span>
+  <span class="badge">jira:issueAction</span>
+  <span class="badge">GitHub Actions CI/CD</span>
+  <span class="badge">Jun 2026</span>
+</div>
+
+<!-- ════════════════════════════════════════════
+     1. EXECUTIVE SUMMARY
+     ════════════════════════════════════════════ -->
+<section id="s1">
+  <h2>1. Executive Summary</h2>
+
+  <h3 id="s1-1">1.1 Mục tiêu kinh doanh & bài toán cần giải quyết</h3>
+  <p>Tổ chức đang vận hành nhiều <strong>Jira Cloud site</strong> và cần mở rộng chức năng Jira theo workflow nội bộ mà không mua thêm marketplace app đắt tiền. Nhóm kỹ thuật nhỏ (2–5 dev) cần tự xây dựng và vận hành tooling trực tiếp trong Jira.</p>
+
+  <table>
+    <tr><th>Vấn đề hiện tại</th><th>Hệ quả</th></tr>
+    <tr><td>Marketplace apps không fit workflow nội bộ</td><td>Dev phải dùng workaround, mất năng suất, data tản mạn</td></tr>
+    <tr><td>Tự build backend Node.js host trên EC2</td><td>$200–800/tháng; cần DevOps; OAuth tự implement phức tạp; rủi ro security</td></tr>
+    <tr><td>Atlassian Connect (legacy iframe)</td><td>Phải tự quản tenant isolation; UI iframe chậm và lạc lõng trong Jira</td></tr>
+    <tr><td>Data không gắn với Jira issue context</td><td>Dev phải chuyển app để tra cứu; mất context làm việc</td></tr>
+    <tr><td>Nhiều site Jira nhưng không có isolation</td><td>Rủi ro data leak giữa site; khó comply data residency</td></tr>
+  </table>
+
+  <h3 id="s1-2">1.2 Tóm tắt giải pháp đề xuất</h3>
+  <div class="box success">
+    <strong>Một Forge App duy nhất — chạy trên Jira Cloud, nhiều site, không host riêng</strong>
+    <p>Xây dựng Atlassian Forge application với các module Jira (Issue Panel, Global Page, Project Page, Admin Page), deploy một lần và install độc lập trên từng Jira site. Toàn bộ backend chạy serverless trên Atlassian infrastructure. Dữ liệu lưu hoàn toàn trong <strong>Forge SQL</strong> — không cần tự provision database, không KVS optimization trong MVP.</p>
+  </div>
+
+  <h3 id="s1-3">1.3 Lợi ích kỳ vọng & Scope</h3>
+  <table>
+    <tr><th>Lợi ích</th><th>Cách đạt được</th></tr>
+    <tr><td><strong>Triển khai nhanh</strong></td><td>Forge serverless — không provision infra; <code>forge deploy</code> xong trong 2–3 phút</td></tr>
+    <tr><td><strong>Dễ mở rộng</strong></td><td>Thêm module Jira mới vào manifest; thêm bảng SQL; không đụng infra</td></tr>
+    <tr><td><strong>Chi phí vận hành thấp</strong></td><td>Không EC2/K8s/RDS; Forge SQL included trong Atlassian plan; team không cần DevOps</td></tr>
+    <tr><td><strong>Multi-site isolation tự động</strong></td><td>Mỗi Jira site install = Forge SQL namespace riêng — platform-enforced, không cần code thêm</td></tr>
+    <tr><td><strong>Security tốt mặc định</strong></td><td>Forge Bridge inject <code>accountId</code> — client không thể giả mạo; OAuth 2.0 tự động</td></tr>
+  </table>
+
+  <table>
+    <tr><th>Phạm vi</th><th>MVP (Phase 1)</th><th>Phase 2</th></tr>
+    <tr><td><strong>Product</strong></td><td><strong>Jira Cloud only</strong></td><td>Vẫn Jira — thêm modules, tính năng</td></tr>
+    <tr><td><strong>Site</strong></td><td>1 pilot site</td><td>Multi-site rollout</td></tr>
+    <tr><td><strong>Storage</strong></td><td>Forge SQL (toàn bộ)</td><td>Forge SQL + cân nhắc KVS cache khi cần</td></tr>
+    <tr><td><strong>Không trong scope</strong></td><td colspan="2">Confluence, Bitbucket, mobile, external auth, billing gateway</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     2. BỐI CẢNH & YÊU CẦU
+     ════════════════════════════════════════════ -->
+<section id="s2">
+  <h2>2. Bối cảnh & Yêu cầu</h2>
+
+  <h3 id="s2-1">2.1 Context — Môi trường Atlassian Cloud</h3>
+  <table>
+    <tr><th>Hạng mục</th><th>Giá trị</th></tr>
+    <tr><td>Platform</td><td>Atlassian Forge (serverless) trên Atlassian Cloud</td></tr>
+    <tr><td>Product</td><td><strong>Jira Software Cloud only</strong></td></tr>
+    <tr><td>Sites</td><td>1 pilot site (MVP) → multi-site (Phase 2)</td></tr>
+    <tr><td>Users/site</td><td>10–200 users (SMB → Mid-market)</td></tr>
+    <tr><td>Runtime</td><td>nodejs24.x, ARM64, 256 MB RAM, 25s timeout</td></tr>
+    <tr><td>Storage</td><td>Forge SQL (MySQL 8.x) — nguồn dữ liệu duy nhất trong MVP</td></tr>
+    <tr><td>Team dev</td><td>2–5 full-stack dev; không có DevOps riêng</td></tr>
+    <tr><td>Deployment</td><td>1 Forge app → install trên N site Jira độc lập</td></tr>
+    <tr><td>Data residency</td><td>Data ở trong Atlassian infra; không egress ra ngoài (MVP)</td></tr>
+  </table>
+
+  <h3 id="s2-2">2.2 Functional Requirements</h3>
+  <table>
+    <tr><th>ID</th><th>Tính năng</th><th>Jira Module</th><th>Phase</th></tr>
+    <tr><td>FR-01</td><td><strong>Time Tracking Provider:</strong> đăng ký app làm provider thay native Jira log work. Sau khi admin chọn provider, native Log work bị ẩn.</td><td><code>jira:timeTrackingProvider</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-02</td><td><strong>Log Work + Work Log tab:</strong> Forge dùng <code>jira:issueAction</code> (nút Log Work) + <code>jira:issueActivity</code> (tab Work Log) — không dùng Connect-style <code>logTimeFormResource</code>.</td><td><code>issueAction</code> + <code>issueActivity</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-03</td><td><strong>Issue Panel:</strong> ghi giờ + lịch sử trên issue; sửa/xóa entry <code>draft</code>. Chỉ hiện khi provider active (<code>displayConditions</code>).</td><td><code>jira:issuePanel</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-04</td><td>Global Page: bảng tuần (issue × ngày), tổng theo category, navigate tuần</td><td><code>jira:globalPage</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-05</td><td>Submit tuần: khóa draft → submitted; idempotent qua bảng <code>week_submissions</code></td><td>Resolver <code>submitWeek</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-06</td><td>Export CSV: UTF-8 BOM, LIMIT 500, warning khi truncated</td><td>Resolver <code>exportTimesheetCsv</code></td><td>MVP ✅</td></tr>
+    <tr><td>FR-07</td><td>Project Page: manager xem record của team, approve/reject</td><td><code>jira:projectPage</code></td><td>Phase 2</td></tr>
+    <tr><td>FR-08</td><td>Admin Page: cấu hình per-site (categories, limits, feature flags)</td><td><code>jira:adminPage</code></td><td>Phase 2</td></tr>
+    <tr><td>FR-09</td><td>Scheduled Trigger: weekly cleanup / auto-report theo lịch</td><td><code>scheduledTrigger</code></td><td>Phase 2</td></tr>
+    <tr><td>FR-10</td><td>Notification: thêm comment trên Jira issue khi trạng thái thay đổi</td><td>Resolver + Jira API</td><td>Phase 2</td></tr>
+  </table>
+
+  <div class="box">
+    <strong>Tại sao cần timeTrackingProvider thay vì chỉ dùng issuePanel?</strong>
+    <p>Nếu chỉ dùng <code>jira:issuePanel</code>, Jira vẫn hiển thị native "Log work" button — user có thể log vào cả hai nơi, gây split data. Đăng ký <code>jira:timeTrackingProvider</code> báo cho Jira biết app này quản lý time tracking: Jira ẩn native log work, hiển thị UI của app thay thế. Guard check <code>timeTrackingProvider.key</code> trong issuePanel và issueAction đảm bảo UI không hiển thị nếu site đó đang dùng provider khác.</p>
+  </div>
+
+  <h3 id="s2-3">2.3 Non-functional Requirements</h3>
+  <table>
+    <tr><th>ID</th><th>Yêu cầu</th><th>Target</th><th>Cách đo</th></tr>
+    <tr><td>NFR-01</td><td>Performance — Resolver latency</td><td>p95 &lt; 2s read; &lt; 3s write</td><td><code>durationMs</code> trong structured log</td></tr>
+    <tr><td>NFR-02</td><td>Security — Data isolation per user</td><td>User chỉ đọc/sửa record của mình</td><td><code>assertSelfOnly</code>; SQL <code>WHERE account_id = ?</code></td></tr>
+    <tr><td>NFR-03</td><td>Multi-site isolation</td><td>Site A không đọc data Site B</td><td>Platform-enforced qua Forge SQL namespace</td></tr>
+    <tr><td>NFR-04</td><td>Test coverage</td><td>Jest ≥ 80% unit test (validation + business logic)</td><td><code>npm test -- --coverage</code></td></tr>
+    <tr><td>NFR-05</td><td>Observability</td><td>Mọi resolver log start / success / error + durationMs</td><td><code>forge logs --environment production</code></td></tr>
+    <tr><td>NFR-06</td><td>Scalability</td><td>Hỗ trợ 200 concurrent users/site không đổi code</td><td>Resolver stateless; Forge auto-scale</td></tr>
+    <tr><td>NFR-07</td><td>Data export</td><td>CSV download đầy đủ cột; mở được Excel</td><td>Manual test; encoding UTF-8 BOM</td></tr>
+  </table>
+
+  <h3 id="s2-4">2.4 Giới hạn Forge Platform — ràng buộc thiết kế</h3>
+  <div class="box warning">
+    <strong>Đây là constraint cứng từ Atlassian — thiết kế phải xoay quanh chúng, không thể bypass.</strong>
+  </div>
+  <table>
+    <tr><th>Giới hạn</th><th>Giá trị</th><th>Ảnh hưởng</th><th>Cách xử lý trong thiết kế</th></tr>
+    <tr><td><strong>Function timeout</strong></td><td>25 giây</td><td>Export lớn, query phức tạp</td><td>Paginate: max 500 rows/call; aggregate trong SQL, không trong JS</td></tr>
+    <tr><td><strong>Memory</strong></td><td>256 MB RAM</td><td>Không load toàn bộ dataset vào JS</td><td>SQL <code>LIMIT</code>; <code>GROUP BY</code> trong DB; không build JSON blob lớn</td></tr>
+    <tr><td><strong>Forge SQL storage</strong></td><td>~5 GB/app</td><td>Cần archive policy về sau</td><td>Soft-delete + archive table; cleanup trigger (Phase 2)</td></tr>
+    <tr><td><strong>Stateless function</strong></td><td>Mỗi invocation riêng biệt</td><td>Không in-memory cache giữa các call</td><td>Không dùng module-level variable làm cache; mọi state trong SQL</td></tr>
+    <tr><td><strong>OAuth scopes</strong></td><td>Phải khai báo; Marketplace review</td><td>Không request scope không dùng</td><td>MVP: chỉ <code>storage:app</code> + <code>read:jira-work</code></td></tr>
+    <tr><td><strong>UI Kit</strong></td><td>Không chạy arbitrary JS DOM</td><td>Không custom DOM manipulation</td><td>Dùng UI Kit components; Custom UI nếu cần complex interactions (Phase 2)</td></tr>
+    <tr><td><strong>Forge Tunnel</strong></td><td>Chỉ dev; thêm ~500ms latency</td><td>Tunnel không representative của production</td><td>Test logic qua unit test; tunnel chỉ verify UI render</td></tr>
+    <tr><td><strong>No egress mặc định</strong></td><td>Phải khai báo allowlist</td><td>MVP không gọi external API</td><td>Không external fetch trong MVP — data residency tốt hơn</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     3. SOLUTION OVERVIEW
+     ════════════════════════════════════════════ -->
+<section id="s3">
+  <h2>3. Solution Overview</h2>
+
+  <h3 id="s3-1">3.1 Kiến trúc tổng quan</h3>
+  <div class="diagram">
+    <div class="diagram-label">Forge App — 3-tier serverless (Jira Cloud only)</div>
+    <div class="flow-row">
+      <div class="flow-box" style="min-width:130px">👤 Jira User<br/><small>Issue / Global / Project</small></div>
+      <div class="flow-box neutral" style="min-width:110px">🔧 Site Admin<br/><small>Admin Page</small></div>
+      <div class="flow-box neutral" style="min-width:110px">📋 Manager<br/><small>Project Page</small></div>
+    </div>
+    <div class="flow-row">
+      <span class="flow-arrow">↓</span>
+      <span style="font-size:11.5px;color:var(--muted);margin-left:8px">Forge Bridge — accountId được platform inject, client không thể giả mạo</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box" style="min-width:560px">
+        🖥️ UI Kit — jira:timeTrackingProvider · jira:issueAction · jira:issuePanel · jira:globalPage · jira:projectPage · jira:adminPage
+      </div>
+    </div>
+    <div class="flow-row">
+      <span class="flow-arrow">↓</span>
+      <span style="font-size:11.5px;color:var(--muted);margin-left:8px">invoke() — Forge sandbox boundary</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box" style="min-width:480px; border-color:var(--success); color:var(--success)">
+        ⚙️ Forge Resolver (serverless function)<br/>
+        <small style="color:var(--muted)">validation → authorization → business logic → repository → storage</small>
+      </div>
+    </div>
+    <div class="flow-row"><span class="flow-arrow">↓</span><span class="flow-arrow" style="margin-left:40px">↓</span></div>
+    <div class="flow-row" style="gap:24px">
+      <div class="flow-box storage" style="min-width:190px">💾 Forge SQL (MySQL)<br/><small>Source of truth — tất cả data</small></div>
+      <div class="flow-box" style="min-width:190px">🔵 Jira REST API<br/><small>api.asUser().requestJira()<br/>verify issue, get project info</small></div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px">Jira API chỉ dùng để verify / enrich — không phải source of truth. Source of truth là Forge SQL.</p>
+  </div>
+
+  <h3 id="s3-2">3.2 Tại sao chọn Forge? — So sánh trực tiếp</h3>
+  <table>
+    <tr><th>Tiêu chí</th><th>Atlassian Connect (legacy)</th><th>Tự host Node.js</th><th>Atlassian Forge ✅</th></tr>
+    <tr><td>Hosting</td><td>Tự host; cần server</td><td>EC2 $200–800/tháng</td><td>Atlassian serverless; $0 server</td></tr>
+    <tr><td>Auth / accountId</td><td>JWT verify tự implement; dễ sai</td><td>OAuth 2.0 tự build; nguy cơ lỗ hổng</td><td>Platform inject <code>context.accountId</code>; không thể giả mạo</td></tr>
+    <tr><td>Multi-site tenant</td><td>Tự build tenant table + isolation</td><td>Tự build; nguy cơ data leak</td><td>Tự động per-installation; SQL namespace riêng</td></tr>
+    <tr><td>UI trong Jira</td><td>Iframe chậm; giao diện lạc lõng</td><td>Iframe / redirect ngoài</td><td>UI Kit native — render trong Jira UI</td></tr>
+    <tr><td>Database</td><td>Tự provision PostgreSQL</td><td>RDS $100–400/tháng</td><td>Forge SQL built-in — không cần provision</td></tr>
+    <tr><td>Deployment</td><td>CI/CD tự dựng; downtime possible</td><td>Blue-green tự dựng</td><td><code>forge deploy</code> zero-downtime; atomic update</td></tr>
+    <tr><td>Time to first deploy</td><td>2–4 tuần setup infra</td><td>3–6 tuần</td><td><strong>1–2 ngày</strong> từ <code>forge create</code> đến production</td></tr>
+  </table>
+
+  <h3 id="s3-3">3.3 Mô hình triển khai — Single App, Multi-site Installation</h3>
+  <div class="diagram">
+    <div class="diagram-label">1 Forge App definition → N site installations hoàn toàn độc lập</div>
+    <div class="flow-row">
+      <div class="flow-box neutral" style="min-width:180px">📦 Developer Console<br/><small>1 app · app.id: ari:cloud:...</small></div>
+    </div>
+    <div class="flow-row"><span class="flow-arrow">↓</span><code style="font-size:11px;margin-left:8px">forge install --site [site-url]</code></div>
+    <div class="flow-row" style="gap:28px">
+      <div style="text-align:center">
+        <div class="flow-box" style="min-width:160px">🏢 Site A<br/><small>team-dev.atlassian.net</small></div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:6px">SQL namespace: inst-A-xxx<br/>Config: categories A, flagsA</div>
+      </div>
+      <div style="text-align:center">
+        <div class="flow-box" style="min-width:160px">🏢 Site B<br/><small>team-prod.atlassian.net</small></div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:6px">SQL namespace: inst-B-yyy<br/>Config: categories B, flagsB</div>
+      </div>
+      <div style="text-align:center">
+        <div class="flow-box" style="min-width:160px">🏢 Site C<br/><small>client-x.atlassian.net</small></div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:6px">SQL namespace: inst-C-zzz<br/>Config: categories C, flagsC</div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px">Forge SQL tự tạo namespace riêng biệt cho từng installation — không cần thêm cột <code>site_id</code> trong bảng.</p>
+  </div>
+
+  <h3 id="s3-4">3.4 Luồng tương tác chính</h3>
+  <h4>Luồng 1 — User tạo record trên Issue Panel</h4>
+  <table>
+    <tr><th>Bước</th><th>Actor</th><th>Hành động</th><th>Kỹ thuật</th></tr>
+    <tr><td>1</td><td>User</td><td>Mở Jira issue → Forge panel render</td><td>Atlassian load <code>jira:issuePanel</code> resource</td></tr>
+    <tr><td>2</td><td>UI Kit</td><td>Lấy issue context</td><td><code>view.getContext() → { issue.key, accountId }</code></td></tr>
+    <tr><td>3</td><td>User</td><td>Điền form → click Submit</td><td>UI Kit form; parse + validate client-side cơ bản</td></tr>
+    <tr><td>4</td><td>UI Kit</td><td>Gọi resolver</td><td><code>invoke('createRecord', { issueKey, ...payload })</code></td></tr>
+    <tr><td>5</td><td>Forge Bridge</td><td>Chuyển request + inject <code>accountId</code></td><td>Platform-enforced; client không truyền được accountId</td></tr>
+    <tr><td>6</td><td>Resolver</td><td>Validate input; authorize</td><td><code>assertSelfOnly(req)</code>; validate schema (issueKey regex, enum, range)</td></tr>
+    <tr><td>7</td><td>Resolver</td><td>Verify issue tồn tại (optional)</td><td><code>api.asUser().requestJira(route`/rest/api/3/issue/${key}`)</code></td></tr>
+    <tr><td>8</td><td>Resolver</td><td>INSERT vào Forge SQL</td><td><code>sql.query('INSERT INTO records ...', [uuid, accountId, issueKey, ...])</code></td></tr>
+    <tr><td>9</td><td>Resolver</td><td>Log + return</td><td><code>logger.success({ durationMs })</code>; return <code>{ ok: true, record }</code></td></tr>
+    <tr><td>10</td><td>UI Kit</td><td>Refresh danh sách record trên panel</td><td>useState update → re-render</td></tr>
+  </table>
+
+  <h4>Luồng 2 — User xem Global Dashboard & Submit tuần</h4>
+  <table>
+    <tr><th>Bước</th><th>Actor</th><th>Hành động</th></tr>
+    <tr><td>1</td><td>User</td><td>Vào Apps → Global Dashboard; chọn tuần cần xem</td></tr>
+    <tr><td>2</td><td>Resolver</td><td><code>getMyDashboard({ weekStart })</code> → SQL aggregate theo tuần; trả về grid data</td></tr>
+    <tr><td>3</td><td>User</td><td>Review data → click "Submit tuần"</td></tr>
+    <tr><td>4</td><td>Resolver</td><td><code>submitWeek({ weekStart })</code> → check <code>week_submissions</code> (idempotent) → UPDATE status → INSERT submission</td></tr>
+    <tr><td>5</td><td>UI Kit</td><td>Hiển thị "Đã submit" badge; disable edit buttons</td></tr>
+    <tr><td>6</td><td>User</td><td>Click "Export CSV" → download file</td></tr>
+  </table>
+
+  <h3 id="s3-5">3.5 Components Map (khớp repo <code>timeforge/</code>)</h3>
+  <table>
+    <tr><th>Layer</th><th>Component</th><th>File</th><th>Trách nhiệm</th></tr>
+    <tr><td rowspan="4"><strong>Frontend</strong></td><td>Log Work Form</td><td><code>src/frontend/log-work-form.jsx</code></td><td><code>jira:issueAction</code> — form ghi giờ (preset phút)</td></tr>
+    <tr><td>Work Log List</td><td><code>src/frontend/work-log-list.jsx</code></td><td><code>jira:issueActivity</code> — tab lịch sử trên issue</td></tr>
+    <tr><td>Issue Panel</td><td><code>src/frontend/issue-panel.jsx</code></td><td>Ghi giờ + sửa/xóa draft; tabs</td></tr>
+    <tr><td>My Timesheet</td><td><code>src/frontend/timesheet.jsx</code></td><td>Bảng tuần, submit, export CSV</td></tr>
+    <tr><td rowspan="3"><strong>Resolver</strong></td><td>Handler</td><td><code>src/resolvers/index.js</code></td><td>logWork, logTimeEntry, update/delete, timesheet, submit, export</td></tr>
+    <tr><td>Validation</td><td><code>src/resolvers/validation.js</code></td><td>assertSelfOnly + validate fields</td></tr>
+    <tr><td>Logger</td><td><code>src/lib/logger.js</code></td><td>start / success / error + durationMs</td></tr>
+    <tr><td><strong>SQL</strong></td><td>Migration</td><td><code>src/sql/migration.js</code></td><td><code>migrationRunner</code> v001/v002</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     4. THIẾT KẾ KỸ THUẬT
+     ════════════════════════════════════════════ -->
+<section id="s4">
+  <h2>4. Thiết kế kỹ thuật chi tiết</h2>
+
+  <h3 id="s4-1">4.1 App Manifest & Module Structure</h3>
+<pre><code># Khớp repo timeforge/manifest.yml (Forge Preview API)
+modules:
+  jira:timeTrackingProvider:
+    - key: timeforge-provider
+      name: TimeForge Time Tracking
+      # Forge KHÔNG dùng logTimeFormResource / getWorkLogsResource (Connect-style).
+      # Khi provider active: native Log work ẩn; app cung cấp issueAction + issueActivity.
+
+  jira:issueAction:                    # = nút "Log Work" thay native
+    - key: timeforge-log-work-action
+      title: Log Work (TimeForge)
+      resource: log-work-form
+      resolver: { function: resolver }
+      render: native
+      displayConditions:
+        timeTrackingProviderEnabled:
+          key: timeforge-provider
+
+  jira:issueActivity:                  # = tab Work Log thay native
+    - key: timeforge-work-log-activity
+      resource: work-log-list
+      resolver: { function: resolver }
+      render: native
+      title: Work Log (TimeForge)
+      displayConditions:
+        timeTrackingProviderEnabled:
+          key: timeforge-provider
+
+  jira:issuePanel:
+    - key: timeforge-panel
+      resource: issue-panel
+      resolver: { function: resolver }
+      render: native
+      title: TimeForge
+      displayConditions:
+        timeTrackingProviderEnabled:
+          key: timeforge-provider
+
+  jira:globalPage:
+    - key: timeforge-timesheet
+      resource: timesheet
+      resolver: { function: resolver }
+      render: native
+      title: My Timesheet
+
+  sql:
+    - key: main
+      engine: mysql
+
+  scheduledTrigger:                    # chạy migration định kỳ
+    - key: timeforge-migration
+      function: runMigration
+      interval: fiveMinute
+
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: runMigration
+      handler: index.runMigration
+
+permissions:
+  scopes:
+    - storage:app
+    - read:jira-work</code></pre>
+
+  <div class="box success">
+    <strong>Forge docs:</strong> Khi app được chọn làm Time Tracking Provider, native Log work / Work log tab bị ẩn.
+    App thay bằng <code>jira:issueAction</code> + <code>jira:issueActivity</code>.
+    Guard UI bằng <code>displayConditions.timeTrackingProviderEnabled</code> (không cần PROVIDER_KEY trong frontend).
+  </div>
+
+  <h3 id="s4-2">4.2 Data Model & Forge SQL Strategy</h3>
+
+  <h4>Tại sao chỉ dùng Forge SQL trong MVP?</h4>
+  <div class="box success">
+    <strong>Một nguồn dữ liệu duy nhất — đơn giản để build, đơn giản để bảo vệ.</strong>
+    <p>Forge SQL cho phép SELECT/GROUP BY/aggregate/JOIN — đủ cho mọi tính năng MVP. KVS (key-value store) sẽ xem xét trong Phase 2 nếu profiling cho thấy query timesheet vượt ngưỡng &gt; 3s. Không optimize trước khi có vấn đề thật.</p>
+  </div>
+
+  <h4>Schema SQL</h4>
+<pre><code>-- ── Bảng chính: mỗi record = 1 row ──────────────────────────────────────
+CREATE TABLE records (
+  id            VARCHAR(36)   PRIMARY KEY,           -- uuid v4
+  account_id    VARCHAR(128)  NOT NULL,              -- từ context.accountId
+  issue_key     VARCHAR(64)   NOT NULL,              -- e.g. HSF-12
+  project_key   VARCHAR(32)   NOT NULL,              -- denormalize để query nhanh
+  record_type   VARCHAR(64)   NOT NULL,              -- domain-specific category
+  duration_min  INT           NOT NULL,              -- đơn vị phút (nếu applicable)
+  note          VARCHAR(500),
+  logged_at     DATE          NOT NULL,              -- ngày user chọn
+  status        ENUM('draft','submitted','approved','rejected') DEFAULT 'draft',
+  created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_user_week    (account_id, logged_at),
+  INDEX idx_project      (project_key, status),
+  INDEX idx_issue        (issue_key)
+);
+
+-- ── Chống submit trùng tuần (idempotent) ─────────────────────────────────
+CREATE TABLE week_submissions (
+  account_id   VARCHAR(128)  NOT NULL,
+  week_start   DATE          NOT NULL,
+  submitted_at DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (account_id, week_start)             -- chỉ 1 row/user/tuần
+);
+
+-- ── Cấu hình per-site (thay cho KVS trong MVP) ───────────────────────────
+CREATE TABLE site_config (
+  config_key   VARCHAR(128)  PRIMARY KEY,
+  config_value TEXT,
+  updated_by   VARCHAR(128),
+  updated_at   DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ── Phase 2: approval history ─────────────────────────────────────────────
+CREATE TABLE approvals (
+  id           VARCHAR(36)   PRIMARY KEY,
+  record_id    VARCHAR(36)   NOT NULL,
+  reviewer_id  VARCHAR(128)  NOT NULL,
+  action       ENUM('approved','rejected') NOT NULL,
+  comment      VARCHAR(500),
+  acted_at     DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_record (record_id)
+);</code></pre>
+
+  <h4>Migration strategy — lazy init khi app khởi động lần đầu</h4>
+<pre><code>// src/db/client.js
+import { sql } from '@forge/sql';
+import { storage } from '@forge/api';
+
+const SCHEMA_VERSION = 2; // tăng mỗi khi thêm bảng/column
+
+export const ensureSchema = async () => {
+  // Dùng Forge KVS chỉ cho 1 việc duy nhất: track schema version
+  const current = await storage.get('db:schema_version') ?? 0;
+  if (current >= SCHEMA_VERSION) return;
+
+  if (current < 1) await sql.query(CREATE_TABLE_RECORDS);
+  if (current < 1) await sql.query(CREATE_TABLE_WEEK_SUBMISSIONS);
+  if (current < 1) await sql.query(CREATE_TABLE_SITE_CONFIG);
+  if (current < 2) await sql.query(`ALTER TABLE records ADD COLUMN extra_json TEXT`);
+
+  await storage.set('db:schema_version', SCHEMA_VERSION);
+};
+
+// Gọi ở đầu mỗi resolver — nhanh vì chỉ chạy thật khi version cũ
+export const withDb = async (fn) => {
+  await ensureSchema();
+  return fn();
+};</code></pre>
+
+  <div class="box warning">
+    <strong>Lưu ý về KVS:</strong> KVS được dùng duy nhất để track <code>db:schema_version</code> — 1 key, value là số nguyên. Không lưu business data vào KVS trong MVP. Nếu sau này cần cache query chậm, sẽ thêm ở Phase 2 sau khi đo được vấn đề thực tế.
+  </div>
+
+  <h4>Repository pattern — typed, parameterized</h4>
+<pre><code>// src/db/repositories/recordRepo.js
+import { sql } from '@forge/sql';
+import { v4 as uuidv4 } from 'uuid';
+
+export const recordRepo = {
+  async insert({ accountId, issueKey, projectKey, recordType, durationMin, note, loggedAt }) {
+    const id = uuidv4();
+    await sql.query(
+      `INSERT INTO records (id, account_id, issue_key, project_key, record_type, duration_min, note, logged_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, accountId, issueKey, projectKey, recordType, durationMin, note ?? null, loggedAt]
+    );
+    return { id, accountId, issueKey, projectKey, recordType, durationMin, note, loggedAt, status: 'draft' };
+  },
+
+  async findByIssueToday(accountId, issueKey, date) {
+    const { rows } = await sql.query(
+      `SELECT * FROM records WHERE account_id = ? AND issue_key = ? AND logged_at = ? ORDER BY created_at DESC`,
+      [accountId, issueKey, date]
+    );
+    return rows;
+  },
+
+  async findByWeek(accountId, weekStart, weekEnd) {
+    const { rows } = await sql.query(
+      `SELECT issue_key, logged_at, record_type, SUM(duration_min) as total_min
+       FROM records
+       WHERE account_id = ? AND logged_at BETWEEN ? AND ?
+       GROUP BY issue_key, logged_at, record_type
+       ORDER BY logged_at`,
+      [accountId, weekStart, weekEnd]
+    );
+    return rows;
+  },
+
+  async findById(id) {
+    const { rows } = await sql.query(`SELECT * FROM records WHERE id = ?`, [id]);
+    return rows[0] ?? null;
+  },
+
+  async updateStatus(id, status) {
+    await sql.query(`UPDATE records SET status = ? WHERE id = ?`, [status, id]);
+  },
+
+  async softDelete(id) {
+    await sql.query(`UPDATE records SET status = 'archived' WHERE id = ?`, [id]);
+  },
+};</code></pre>
+
+  <h3 id="s4-3">4.3 Resolver API — Định nghĩa & chi tiết từng hàm</h3>
+  <table>
+    <tr><th>Resolver</th><th>Entry point</th><th>Input</th><th>Logic</th><th>Output</th></tr>
+    <tr><td><code>logWork</code></td><td>timeTrackingProvider · issueAction "Log Work"</td><td>issueKey, category, durationMinutes, loggedAt, note</td><td>assertSelfOnly → validate → fetchIssue (projectKey) → INSERT</td><td><code>{ ok, record }</code></td></tr>
+    <tr><td><code>getWorkLogs</code></td><td>timeTrackingProvider · issueAction "History"</td><td>issueKey, allUsers?</td><td>SELECT WHERE issue_key; allUsers=true → tất cả user; false → chỉ mình</td><td><code>{ logs[], totalMin, totalFormatted }</code></td></tr>
+    <tr><td><code>updateRecord</code></td><td>issuePanel</td><td>id, durationMinutes?, note?</td><td>assertOwnership → status=draft check → UPDATE</td><td><code>{ ok, record }</code></td></tr>
+    <tr><td><code>deleteRecord</code></td><td>issuePanel</td><td>id</td><td>assertOwnership → status=draft check → soft delete</td><td><code>{ ok }</code></td></tr>
+    <tr><td><code>getMyDashboard</code></td><td>globalPage</td><td>weekStart</td><td>SELECT + GROUP BY trong SQL → transform → grid</td><td><code>{ rows[], totals, weekStart, weekEnd }</code></td></tr>
+    <tr><td><code>submitWeek</code></td><td>globalPage</td><td>weekStart</td><td>Check week_submissions (idempotent) → UPDATE status → INSERT submission</td><td><code>{ ok, submittedCount, alreadySubmitted? }</code></td></tr>
+    <tr><td><code>exportCsv</code></td><td>globalPage</td><td>weekStart, weekEnd</td><td>SELECT flat rows (LIMIT 500) → build CSV string</td><td><code>{ ok, csvContent, filename }</code></td></tr>
+    <tr><td><code>getSiteConfig</code></td><td>all modules</td><td>key?</td><td>SELECT từ site_config; read-only, không cần auth đặc biệt</td><td><code>{ config }</code></td></tr>
+    <tr><td><code>updateSiteConfig</code></td><td>adminPage</td><td>key, value</td><td>assertSiteAdmin → validate key whitelist → UPDATE site_config</td><td><code>{ ok }</code></td></tr>
+  </table>
+
+  <h4>submitWeek — idempotent hoàn toàn bằng SQL</h4>
+<pre><code>defineLogged('submitWeek', async (req) => {
+  const accountId = assertSelfOnly(req);
+  const { weekStart } = req.payload;
+  const weekEnd = addDays(weekStart, 6);
+
+  // Idempotent check: đã submit tuần này chưa?
+  const { rows: existing } = await sql.query(
+    `SELECT submitted_at FROM week_submissions WHERE account_id = ? AND week_start = ?`,
+    [accountId, weekStart]
+  );
+  if (existing.length > 0) return { ok: true, alreadySubmitted: true, submittedAt: existing[0].submitted_at };
+
+  // Đếm draft trong tuần
+  const { rows: drafts } = await sql.query(
+    `SELECT COUNT(*) as cnt FROM records WHERE account_id = ? AND logged_at BETWEEN ? AND ? AND status = 'draft'`,
+    [accountId, weekStart, weekEnd]
+  );
+  if (drafts[0].cnt === 0) return { ok: false, reason: 'nothing_to_submit' };
+
+  // Atomic: UPDATE + INSERT (không dùng transaction vì Forge SQL không support multi-statement tx)
+  await sql.query(
+    `UPDATE records SET status = 'submitted' WHERE account_id = ? AND logged_at BETWEEN ? AND ? AND status = 'draft'`,
+    [accountId, weekStart, weekEnd]
+  );
+  await sql.query(
+    `INSERT INTO week_submissions (account_id, week_start) VALUES (?, ?)`,
+    [accountId, weekStart]
+  );
+
+  return { ok: true, submittedCount: drafts[0].cnt };
+});</code></pre>
+
+  <h4>exportCsv — paginate để không timeout</h4>
+<pre><code>defineLogged('exportCsv', async (req) => {
+  const accountId = assertSelfOnly(req);
+  const { weekStart, weekEnd } = req.payload;
+
+  // LIMIT 500 — tránh timeout 25s và OOM 256MB
+  const { rows } = await sql.query(
+    `SELECT issue_key, logged_at, record_type, duration_min, note, status
+     FROM records
+     WHERE account_id = ? AND logged_at BETWEEN ? AND ?
+     ORDER BY logged_at, created_at
+     LIMIT 500`,
+    [accountId, weekStart, weekEnd]
+  );
+
+  const header = 'date,issue_key,record_type,duration_min,hours,note,status';
+  const body = rows.map(r =>
+    [r.logged_at, r.issue_key, r.record_type, r.duration_min,
+     (r.duration_min / 60).toFixed(2), `"${(r.note ?? '').replace(/"/g, '""')}"`, r.status].join(',')
+  ).join('\n');
+
+  return {
+    ok: true,
+    csvContent: '' + header + '\n' + body,   // BOM để Excel mở đúng UTF-8
+    filename: `records-${weekStart}-to-${weekEnd}.csv`,
+    rowCount: rows.length,
+  };
+});</code></pre>
+
+  <h3 id="s4-4">4.4 Time Tracking Provider — thiết kế Forge (Preview)</h3>
+
+  <div class="box success">
+    <strong>Forge mapping (docs Atlassian):</strong>
+    Khi admin chọn TimeForge làm provider → native Log work / Work log tab bị ẩn.
+    App thay bằng <code>jira:issueAction</code> (nút Log Work) + <code>jira:issueActivity</code> (tab Work Log).
+    <strong>Không</strong> dùng Connect fields <code>logTimeFormResource</code> / <code>getWorkLogsResource</code>.
+  </div>
+
+  <table>
+    <tr><th>Native Jira</th><th>Forge module trong TimeForge</th><th>File UI</th><th>Resolver</th></tr>
+    <tr><td>Log work button</td><td><code>jira:issueAction</code></td><td><code>log-work-form.jsx</code></td><td><code>logWork</code></td></tr>
+    <tr><td>Work log tab</td><td><code>jira:issueActivity</code></td><td><code>work-log-list.jsx</code></td><td><code>getWorkLogs</code></td></tr>
+    <tr><td>(bổ sung)</td><td><code>jira:issuePanel</code></td><td><code>issue-panel.jsx</code></td><td><code>logTimeEntry</code> / update / delete</td></tr>
+    <tr><td>(bổ sung)</td><td><code>jira:globalPage</code></td><td><code>timesheet.jsx</code></td><td>timesheet / submit / export</td></tr>
+  </table>
+
+  <h4>Guard bằng displayConditions (không frontend PROVIDER_KEY)</h4>
+<pre><code>displayConditions:
+  timeTrackingProviderEnabled:
+    key: timeforge-provider   # khớp jira:timeTrackingProvider.key</code></pre>
+  <p>Áp dụng trên issuePanel, issueAction, issueActivity — UI chỉ hiện khi admin đã chọn TimeForge.</p>
+
+  <h4>Bước demo bắt buộc</h4>
+  <ol>
+    <li><code>forge deploy</code> + <code>forge install</code></li>
+    <li>Jira → Settings → Issues → Time tracking → chọn <strong>TimeForge Time Tracking</strong></li>
+    <li>Mở issue → … → Log Work (TimeForge) / tab Work Log / panel TimeForge</li>
+  </ol>
+
+  <h4>Resolvers chính (MVP đã có)</h4>
+  <table>
+    <tr><th>Resolver</th><th>Dùng ở</th><th>Ghi chú</th></tr>
+    <tr><td><code>logWork</code></td><td>issueAction form</td><td>INSERT draft + verify issue</td></tr>
+    <tr><td><code>logTimeEntry</code></td><td>issuePanel</td><td>Cùng bảng <code>time_entries</code></td></tr>
+    <tr><td><code>getWorkLogs</code></td><td>issueActivity</td><td><code>allUsers: true</code> trên issue</td></tr>
+    <tr><td><code>getIssueTimeLogs</code></td><td>issuePanel lịch sử</td><td>Chỉ entries của user hiện tại</td></tr>
+    <tr><td><code>updateTimeEntry</code> / <code>deleteTimeEntry</code></td><td>issuePanel</td><td>Chỉ draft + ownership</td></tr>
+    <tr><td><code>getMyTimesheet</code></td><td>globalPage</td><td>Grid tuần + byCategory</td></tr>
+    <tr><td><code>submitWeek</code></td><td>globalPage</td><td>Idempotent <code>week_submissions</code></td></tr>
+    <tr><td><code>exportTimesheetCsv</code></td><td>globalPage</td><td>BOM + LIMIT 500 + truncated</td></tr>
+  </table>
+
+  <h3 id="s4-5">4.5 Permission & Security Model</h3>
+  <div class="box danger">
+    <strong>Quy tắc bất biến:</strong> Không bao giờ tin <code>accountId</code> từ UI payload. Luôn dùng <code>context.accountId</code> được Forge Bridge inject — client không thể forge giá trị này.
+  </div>
+
+<pre><code>// src/resolvers/auth.js
+
+export const assertSelfOnly = (req) => {
+  const ctxId = req.context.accountId;
+  const payloadId = req.payload?.accountId;
+  if (payloadId && payloadId !== ctxId) throw new ForbiddenError('Không được thao tác thay user khác');
+  return ctxId;
+};
+
+export const assertOwnership = async (recordId, accountId) => {
+  const record = await recordRepo.findById(recordId);
+  if (!record) throw new NotFoundError('Record không tồn tại');
+  if (record.account_id !== accountId) throw new ForbiddenError('Record không thuộc về bạn');
+  if (record.status !== 'draft') throw new ForbiddenError('Chỉ sửa/xóa được record ở trạng thái draft');
+  return record;
+};
+
+export const assertProjectLead = async (projectKey, accountId) => {
+  const res = await api.asUser().requestJira(route`/rest/api/3/project/${projectKey}`);
+  const project = await res.json();
+  if (project.lead?.accountId !== accountId) throw new ForbiddenError('Chỉ project lead mới thực hiện được');
+};
+
+export const assertSiteAdmin = async (accountId) => {
+  // Kiểm tra Jira site-admin role qua API
+  const res = await api.asUser().requestJira(route`/rest/api/3/myself`);
+  const user = await res.json();
+  const isAdmin = user.applicationRoles?.items?.some(r => r.key === 'jira-administrators');
+  if (!isAdmin) throw new ForbiddenError('Chỉ Jira admin mới cấu hình được site settings');
+};
+
+// Error types
+export class ValidationError extends Error { constructor(msg) { super(msg); this.code = 'VALIDATION_ERROR'; } }
+export class ForbiddenError  extends Error { constructor(msg) { super(msg); this.code = 'FORBIDDEN'; } }
+export class NotFoundError   extends Error { constructor(msg) { super(msg); this.code = 'NOT_FOUND'; } }</code></pre>
+
+  <table>
+    <tr><th>Threat</th><th>Phòng thủ</th></tr>
+    <tr><td>Giả mạo accountId trong payload</td><td><code>assertSelfOnly(req)</code> — luôn dùng <code>context.accountId</code></td></tr>
+    <tr><td>IDOR — đọc/sửa record của user khác</td><td>Mọi SQL có <code>WHERE account_id = ?</code>; <code>assertOwnership</code> trước update/delete</td></tr>
+    <tr><td>Manager xem project không thuộc quyền</td><td>Phase 2: <code>assertProjectLead</code> verify qua Jira project API</td></tr>
+    <tr><td>SQL injection</td><td>Parameterized queries 100% — không string concatenation</td></tr>
+    <tr><td>Config thay đổi bởi non-admin</td><td><code>assertSiteAdmin</code> trong <code>updateSiteConfig</code></td></tr>
+  </table>
+
+  <h3 id="s4-6">4.6 Configuration per Site</h3>
+  <p>Cấu hình per-site được lưu trong bảng <code>site_config</code> (Forge SQL) — đọc/ghi qua resolver, không hardcode trong code. Admin Page (Phase 2) sẽ cung cấp UI để chỉnh.</p>
+
+<pre><code>// src/db/repositories/configRepo.js
+export const configRepo = {
+  async get(key, defaultValue = null) {
+    const { rows } = await sql.query(`SELECT config_value FROM site_config WHERE config_key = ?`, [key]);
+    if (!rows.length) return defaultValue;
+    try { return JSON.parse(rows[0].config_value); }
+    catch { return rows[0].config_value; }
+  },
+
+  async set(key, value, updatedBy) {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    await sql.query(
+      `INSERT INTO site_config (config_key, config_value, updated_by) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE config_value = VALUES(config_value), updated_by = VALUES(updated_by), updated_at = NOW()`,
+      [key, serialized, updatedBy]
+    );
+  },
+};
+
+// Dùng trong resolver:
+const categories = await configRepo.get('categories', ['general', 'bug', 'feature', 'meeting']);
+const maxPerDay  = await configRepo.get('max_records_per_day', 20);
+const featureApproval = await configRepo.get('feature.approval', false);</code></pre>
+
+  <h3 id="s4-7">4.7 Error Handling & Logging Strategy</h3>
+<pre><code>// src/lib/logger.js
+export const createLogger = (module) => ({
+  start:   (meta = {}) => console.info(JSON.stringify({ '@formatLog': true, level: 'info',  module, event: `${meta.action}.start`,   ...meta, ts: Date.now() })),
+  success: (meta = {}) => console.info(JSON.stringify({ '@formatLog': true, level: 'info',  module, event: `${meta.action}.success`, ...meta, ts: Date.now() })),
+  error:   (meta = {}) => console.error(JSON.stringify({ '@formatLog': true, level: 'error', module, event: `${meta.action}.error`,   ...meta, ts: Date.now() })),
+});
+
+// src/index.js — defineLogged bọc mọi resolver
+const defineLogged = (name, fn) =>
+  defineHandler(name, async (req) => {
+    const logger = createLogger('platform-resolver');
+    const t0 = Date.now();
+    logger.start({ action: name, accountId: req.context.accountId });
+    try {
+      await withDb(() => {});           // ensure schema on first run
+      const result = await fn(req);
+      logger.success({ action: name, durationMs: Date.now() - t0 });
+      return result;
+    } catch (err) {
+      logger.error({ action: name, durationMs: Date.now() - t0, code: err.code, message: err.message });
+      throw err;
+    }
+  });</code></pre>
+
+  <table>
+    <tr><th>Log event</th><th>Level</th><th>Khi nào</th></tr>
+    <tr><td><code>createRecord.start</code></td><td>info</td><td>Ngay đầu resolver, trước bất kỳ logic nào</td></tr>
+    <tr><td><code>createRecord.success</code> + <code>durationMs</code></td><td>info</td><td>Khi return thành công</td></tr>
+    <tr><td><code>createRecord.error</code> + <code>code</code> + <code>message</code></td><td>error</td><td>Mọi loại lỗi — validation, auth, DB</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     5. MULTI-SITE & SCALABILITY
+     ════════════════════════════════════════════ -->
+<section id="s5">
+  <h2>5. Chiến lược Multi-site & Scalability</h2>
+
+  <h3>5.1 Site Isolation — Platform-enforced, không cần code thêm</h3>
+  <div class="box success">
+    <strong>Không cần thêm cột <code>site_id</code> hay tenant logic trong code.</strong> Forge SQL tự tạo namespace riêng biệt cho từng installation. Resolver đang chạy trong context của site nào thì chỉ thấy data của site đó — không có API nào để đọc data của site khác.
+  </div>
+  <table>
+    <tr><th>Tầng isolation</th><th>Cơ chế</th><th>Cần code không?</th></tr>
+    <tr><td>SQL data</td><td>Mỗi installation có DB namespace riêng</td><td>❌ Không cần</td></tr>
+    <tr><td>KVS (<code>db:schema_version</code>)</td><td>Mỗi installation có KVS partition riêng</td><td>❌ Không cần</td></tr>
+    <tr><td>Function execution context</td><td>Resolver chạy trong context installation đang active</td><td>❌ Không cần</td></tr>
+    <tr><td>Jira API calls</td><td><code>asUser()</code> chỉ access site user đang ở</td><td>❌ Không cần</td></tr>
+    <tr><td>Forge Variables (secrets)</td><td>Per-environment, shared across sites (cùng env)</td><td>✅ Nếu cần per-site secret → lưu trong <code>site_config</code> SQL</td></tr>
+  </table>
+
+  <h3>5.2 Onboard Site Mới — Zero-downtime, Auto-provision</h3>
+  <ol>
+    <li>Jira admin tại site mới vào <strong>Jira Settings → Apps → Manage apps → Install</strong></li>
+    <li>Forge tạo installation mới — SQL namespace + KVS partition mới, trống hoàn toàn</li>
+    <li>User mở panel lần đầu → resolver gọi <code>ensureSchema()</code> → chạy migration → set default config</li>
+    <li>Site hoạt động ngay — không ảnh hưởng bất kỳ site nào đã cài trước</li>
+    <li>Admin vào Admin Page (Phase 2) để tùy chỉnh categories, feature flags</li>
+  </ol>
+
+  <h3>5.3 Horizontal Scaling</h3>
+  <table>
+    <tr><th>Tình huống</th><th>Hành vi Forge</th><th>Yêu cầu từ code</th></tr>
+    <tr><td>50 user cùng mở panel</td><td>Forge spin up 50 function instances song song</td><td>Resolver phải <strong>stateless</strong> — không dùng module-level variable làm state</td></tr>
+    <tr><td>DB connection pool</td><td>Forge SQL tự quản connection pool</td><td>Không tự tạo pool; gọi <code>sql.query()</code> trực tiếp</td></tr>
+    <tr><td>Submit tuần đồng thời (race condition)</td><td>Không auto-handle</td><td>PRIMARY KEY <code>(account_id, week_start)</code> trong <code>week_submissions</code> → INSERT fail nếu đã có → idempotent</td></tr>
+    <tr><td>Scheduled trigger</td><td>1 instance duy nhất tại 1 thời điểm</td><td>Không lo concurrent; nhưng logic phải xong trong 25s — paginate nếu cần</td></tr>
+  </table>
+
+  <h3>5.4 Rate Limit & Throttling</h3>
+  <table>
+    <tr><th>Giới hạn</th><th>Nguồn</th><th>Cách xử lý</th></tr>
+    <tr><td>Jira API: ~10 req/s per user</td><td>Atlassian rate limit</td><td>Gọi <code>requestJira()</code> chỉ khi cần thiết (verify issue); không gọi trong loop</td></tr>
+    <tr><td>HTTP 429 Too Many Requests</td><td>Jira API</td><td>Retry tối đa 3 lần với exponential backoff (500ms → 1s → 2s); log warning</td></tr>
+    <tr><td>Forge function timeout 25s</td><td>Forge platform</td><td>Export LIMIT 500; query aggregate trong SQL; không load full dataset vào JS</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     6. DEPLOYMENT & CI/CD
+     ════════════════════════════════════════════ -->
+<section id="s6">
+  <h2>6. Deployment & CI/CD Pipeline</h2>
+
+  <h3>6.1 Environment Strategy</h3>
+  <table>
+    <tr><th>Environment</th><th>Mục đích</th><th>Trigger deploy</th><th>Site</th></tr>
+    <tr><td><code>development</code></td><td>Dev daily; <code>forge tunnel</code> để test UI</td><td>Manual</td><td>Personal dev site</td></tr>
+    <tr><td><code>staging</code></td><td>QA; integration test; smoke test trước production</td><td>Auto khi push <code>main</code></td><td>Staging site riêng</td></tr>
+    <tr><td><code>production</code></td><td>Live users; pilot site</td><td>Manual approve sau staging green</td><td>Production site(s)</td></tr>
+  </table>
+
+  <h3>6.2 Forge CLI Deployment Workflow</h3>
+<pre><code># 1. Build frontend bundles
+npm run build:frontend
+
+# 2. Deploy app lên Forge (backend + frontend bundled)
+forge deploy --environment staging --non-interactive
+
+# 3. Install / upgrade trên site (lần đầu: install; sau đó: upgrade)
+forge install --upgrade --non-interactive \
+  --site your-site.atlassian.net \
+  --product jira \
+  --environment staging
+
+# 4. Verify logs ngay sau deploy
+forge logs --environment staging --since 10m --grouped</code></pre>
+
+  <h3>6.3 GitHub Actions CI/CD</h3>
+<pre><code># .github/workflows/ci.yml
+name: CI
+on:
+  pull_request: { branches: [main] }
+  push:         { branches: [main, feature/**] }
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test -- --coverage --ci
+      - run: npm run build:frontend</code></pre>
+
+<pre><code># .github/workflows/cd.yml
+name: CD
+on:
+  push: { branches: [main] }
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci && npm run build:frontend
+      - run: npm install -g @forge/cli
+      - name: Deploy + install staging
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+        run: |
+          forge deploy --environment staging --non-interactive
+          forge install --upgrade --non-interactive \
+            --site ${{ vars.STAGING_SITE }} --product jira --environment staging
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production          # GitHub environment protection — phải approve thủ công
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci && npm run build:frontend
+      - run: npm install -g @forge/cli
+      - name: Deploy + install production
+        env:
+          FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+        run: |
+          forge deploy --environment production --non-interactive
+          for SITE in ${{ vars.PRODUCTION_SITES }}; do
+            forge install --upgrade --non-interactive \
+              --site $SITE --product jira --environment production
+          done</code></pre>
+
+  <h3>6.4 Rollback Strategy</h3>
+  <div class="box warning">
+    <strong>Forge không có lệnh rollback chính thức.</strong> Cần thiết kế sẵn 3 tầng rollback.
+  </div>
+  <table>
+    <tr><th>Scenario</th><th>Cách rollback</th><th>Thời gian</th></tr>
+    <tr><td>Bug resolver logic / UI</td><td>Revert git commit → merge vào main → CD tự deploy lại</td><td>5–10 phút</td></tr>
+    <tr><td>Tính năng mới gây lỗi</td><td>Tắt feature flag qua Admin Page (nếu đã có) hoặc set trong <code>site_config</code> SQL → không cần redeploy</td><td>1–2 phút</td></tr>
+    <tr><td>DB migration sai</td><td>Viết reverse migration SQL; chạy qua resolver debug endpoint tạm thời</td><td>15–30 phút</td></tr>
+    <tr><td>Scope/manifest thay đổi</td><td>Revert manifest; redeploy; user phải re-authorize nếu scope tăng</td><td>10 phút + user action</td></tr>
+  </table>
+
+  <h3>6.5 Secrets & Credentials Management</h3>
+  <table>
+    <tr><th>Secret</th><th>Lưu ở</th><th>Không lưu ở</th></tr>
+    <tr><td><code>FORGE_EMAIL</code>, <code>FORGE_API_TOKEN</code></td><td>GitHub Secrets</td><td>.env, code, git history</td></tr>
+    <tr><td>External API keys (Phase 2)</td><td>Forge Variables (per-environment)</td><td>manifest.yml, code</td></tr>
+    <tr><td>Per-site secrets</td><td><code>site_config</code> SQL (set qua Admin Page, chỉ admin thấy)</td><td>Forge Variables nếu cần khác nhau giữa site</td></tr>
+    <tr><td>DB password</td><td>Không cần — Forge SQL tự quản auth</td><td>—</td></tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     7. OBSERVABILITY & MAINTAINABILITY
+     ════════════════════════════════════════════ -->
+<section id="s7">
+  <h2>7. Observability & Maintainability</h2>
+
+  <h3>7.1 Logging Strategy</h3>
+  <p>MVP dùng <strong>Forge built-in logs</strong> — đủ cho pilot site 10–200 users. Structured JSON với <code>@formatLog: true</code> để searchable.</p>
+<pre><code>forge logs --environment production --follow
+forge logs --environment production --since 1h --grouped       # theo function
+forge logs --environment staging --since 15m | grep '"level":"error"'</code></pre>
+
+  <table>
+    <tr><th>Metric cần theo dõi</th><th>Đọc từ log</th><th>Ngưỡng cảnh báo</th></tr>
+    <tr><td>Resolver latency</td><td><code>durationMs</code> trong event <code>.success</code></td><td>&gt; 3000ms → investigate query</td></tr>
+    <tr><td>Error rate</td><td>Count event với <code>level: error</code></td><td>&gt; 5 errors/phút → check logs</td></tr>
+    <tr><td>Validation error rate</td><td><code>code: VALIDATION_ERROR</code></td><td>&gt; 20% → UI form có vấn đề</td></tr>
+    <tr><td>Submit idempotent hit</td><td><code>alreadySubmitted: true</code> trong response</td><td>Normal — chỉ log khi bất thường cao</td></tr>
+  </table>
+
+  <h3>7.2 Version Management & Backward Compatibility</h3>
+  <table>
+    <tr><th>Tình huống</th><th>Chiến lược</th></tr>
+    <tr><td>Thêm column SQL</td><td><code>ALTER TABLE ADD COLUMN ... DEFAULT</code> — không breaking; tăng <code>SCHEMA_VERSION</code></td></tr>
+    <tr><td>Đổi tên resolver</td><td>Giữ alias tên cũ → deploy → đợi tất cả UI deploy → xóa alias</td></tr>
+    <tr><td>Thay đổi response schema</td><td>Versionless nếu chỉ thêm field; dùng version flag nếu thay đổi breaking</td></tr>
+    <tr><td>Thêm OAuth scope mới</td><td>User phải re-authorize → thông báo trước; dùng feature flag để giữ tính năng mới ẩn cho đến khi authorize xong</td></tr>
+    <tr><td>Forge platform update runtime</td><td>Test trên staging với runtime mới; đọc Forge changelog trước mỗi sprint</td></tr>
+  </table>
+
+  <h3>7.3 Upgrade Path khi Atlassian thay đổi API</h3>
+  <ul>
+    <li>Tất cả Jira API calls đi qua <code>src/lib/jiraClient.js</code> — chỉ 1 nơi cần update khi API thay đổi</li>
+    <li>Dùng <code>/rest/api/3/</code> (v3) — Atlassian cam kết deprecation notice 6–12 tháng trước khi xóa</li>
+    <li>Subscribe <strong>Atlassian Developer Changelog</strong> — check bi-weekly; đặt reminder trong calendar</li>
+    <li>Integration tests mock Jira API responses — phát hiện breaking change trước khi hit production</li>
+  </ul>
+</section>
+
+<!-- ════════════════════════════════════════════
+     8. RỦI RO & GIẢM THIỂU
+     ════════════════════════════════════════════ -->
+<section id="s8">
+  <h2>8. Rủi ro & Giải pháp giảm thiểu</h2>
+  <table>
+    <tr><th>Rủi ro</th><th>Khả năng</th><th>Mức độ</th><th>Giải pháp</th></tr>
+    <tr class="risk-high">
+      <td><strong>Function timeout 25s bị vượt</strong></td>
+      <td>Trung bình — export nhiều row, query phức tạp</td>
+      <td>Cao — user thấy lỗi trắng màn hình</td>
+      <td>LIMIT 500 rows/call cho export; GROUP BY trong SQL, không trong JS; không N+1 queries</td>
+    </tr>
+    <tr class="risk-high">
+      <td><strong>IDOR — user đọc/sửa record người khác</strong></td>
+      <td>Thấp nếu dùng đúng pattern</td>
+      <td>Rất cao — security breach</td>
+      <td><code>assertSelfOnly</code> bắt buộc trong mọi write resolver; mọi SQL WHERE có <code>account_id = ?</code>; không tin payload accountId</td>
+    </tr>
+    <tr class="risk-med">
+      <td><strong>DB migration sai làm hỏng schema</strong></td>
+      <td>Thấp nếu test kỹ trên staging</td>
+      <td>Cao — app không load được</td>
+      <td>Test migration trên staging trước; viết reverse migration sẵn; SCHEMA_VERSION tracking</td>
+    </tr>
+    <tr class="risk-med">
+      <td><strong>Vendor lock-in Atlassian Forge</strong></td>
+      <td>Trung bình — phụ thuộc Atlassian roadmap</td>
+      <td>Trung bình — khó migrate nếu cần thoát</td>
+      <td>Export CSV/JSON đầy đủ; business logic tách biệt với Forge API qua repository pattern; documented schema</td>
+    </tr>
+    <tr class="risk-med">
+      <td><strong>Forge SQL storage quota đầy</strong></td>
+      <td>Thấp trong 1–2 năm đầu</td>
+      <td>Cao — app ngừng ghi data</td>
+      <td>Soft-delete thay vì hard-delete; scheduledTrigger archive data &gt; 1 năm (Phase 2); monitor row count định kỳ</td>
+    </tr>
+    <tr class="risk-med">
+      <td><strong>Race condition khi submit đồng thời</strong></td>
+      <td>Thấp</td>
+      <td>Trung bình — duplicate submission</td>
+      <td>PRIMARY KEY <code>(account_id, week_start)</code> → INSERT fail nếu đã có → idempotent tự nhiên</td>
+    </tr>
+    <tr class="risk-low">
+      <td><strong>Jira API 429 Rate limit</strong></td>
+      <td>Thấp với &lt; 200 users</td>
+      <td>Thấp — retry tự động</td>
+      <td>Retry 3 lần với exponential backoff; gọi Jira API chỉ khi thật sự cần (không gọi trong loop)</td>
+    </tr>
+    <tr class="risk-low">
+      <td><strong>Scope creep thêm tính năng ngoài kế hoạch</strong></td>
+      <td>Cao trong thực tế</td>
+      <td>Trung bình — delay, tech debt</td>
+      <td>Feature flag cho mọi tính năng mới; review scope mỗi sprint; "Phase 2" là rào chắn rõ ràng</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ════════════════════════════════════════════
+     9. ROADMAP TRIỂN KHAI
+     ════════════════════════════════════════════ -->
+<section id="s9">
+  <h2>9. Roadmap Triển khai</h2>
+
+  <div class="phase-card">
+    <div class="phase-header">
+      Phase 1 — MVP: Core Feature, 1 Site Pilot
+      <span class="tag">Tuần 1–6</span>
+    </div>
+    <div class="phase-body">
+      <div class="two-col">
+        <div class="col-box">
+          <h4>Deliverables</h4>
+          <ul class="checklist">
+            <li>Forge app setup: manifest (Jira only), SQL schema, migration versioning</li>
+            <li>Logger + validation framework (copy từ portfolio nếu có)</li>
+            <li><code>jira:timeTrackingProvider</code> + <code>issueAction</code> + <code>issueActivity</code> (Forge Preview mapping)</li>
+            <li><code>jira:issuePanel</code> — ghi giờ + sửa/xóa draft; displayConditions</li>
+            <li><code>jira:globalPage</code> — My Timesheet; submit; export CSV (BOM + LIMIT 500)</li>
+            <li>assertSelfOnly + assertOwnership verified</li>
+            <li>GitHub Actions CI (lint + test + build) + CD staging auto</li>
+            <li>CD production với manual approval gate</li>
+            <li>Deploy production + smoke test trên pilot site</li>
+          </ul>
+        </div>
+        <div class="col-box">
+          <h4>Tiêu chí GO / NOT-GO</h4>
+          <ul class="checklist">
+            <li>CI green: eslint + jest ≥ 80% coverage</li>
+            <li>Resolver p95 &lt; 2s trên staging (check durationMs)</li>
+            <li>Submit tuần — idempotent (submit 2 lần không duplicate)</li>
+            <li>Export CSV mở được Excel; đúng encoding UTF-8</li>
+            <li>Structured log đúng format trên forge logs production</li>
+            <li>assertSelfOnly + ownership check verified end-to-end</li>
+            <li>Pilot users dùng được trên production site</li>
+          </ul>
+        </div>
+      </div>
+
+      <h4>Timeline — 6 tuần chi tiết</h4>
+      <table>
+        <tr><th>Tuần</th><th>Focus</th><th>Deliverable chính</th><th>Pattern tái dùng</th></tr>
+        <tr><td><strong>1</strong></td><td>Foundation</td><td>Forge app setup; SQL schema + migration; logger; validation; CI cơ bản; deploy dev</td><td>Logger, validation từ portfolio</td></tr>
+        <tr><td><strong>2</strong></td><td>Issue Panel</td><td>CRUD record trên issue; list today; edit/delete draft; assertSelfOnly</td><td>Issue panel + invoke pattern</td></tr>
+        <tr><td><strong>3</strong></td><td>Global Dashboard</td><td>Weekly grid view; navigate tuần trước/sau; tổng theo category</td><td>Global page layout</td></tr>
+        <tr><td><strong>4</strong></td><td>Submit + Export</td><td>submitWeek idempotent (SQL); exportCsv với LIMIT 500; UI badges</td><td>week_submissions PRIMARY KEY</td></tr>
+        <tr><td><strong>5</strong></td><td>Config + Polish</td><td>site_config table; ensureSchema lazy init; error messages UX; edge cases</td><td>configRepo pattern</td></tr>
+        <tr><td><strong>6</strong></td><td>CI/CD + Deploy</td><td>CD pipeline hoàn chỉnh; production deploy + install; smoke test; verify logs</td><td>cd.yml từ portfolio</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="phase-card" style="border-color: #6554c0;">
+    <div class="phase-header" style="background: #6554c0;">
+      Phase 2 — Multi-site Rollout & Configuration Layer
+      <span class="tag">Tuần 7–14</span>
+    </div>
+    <div class="phase-body">
+      <div class="two-col">
+        <div class="col-box">
+          <h4>Deliverables</h4>
+          <ul class="checklist">
+            <li><code>jira:adminPage</code> — UI đầy đủ để admin chỉnh site_config</li>
+            <li><code>jira:projectPage</code> — Manager xem team records; approve/reject</li>
+            <li>assertProjectLead — verify qua Jira project API</li>
+            <li>Approval flow: <code>approvals</code> table; UPDATE status → approved/rejected</li>
+            <li>Install trên site thứ 2, thứ 3 — verify isolation end-to-end</li>
+            <li>scheduledTrigger — weekly cleanup records cũ; auto-report</li>
+            <li>Notification: comment trên Jira issue khi trạng thái thay đổi</li>
+            <li>Feature flags UI qua Admin Page</li>
+          </ul>
+        </div>
+        <div class="col-box">
+          <h4>Kỹ thuật cần giải quyết</h4>
+          <ul>
+            <li>Scheduled trigger phải xong trong 25s — paginate nếu cleanup nhiều rows</li>
+            <li>assertProjectLead: verify <code>project.lead.accountId</code> qua Jira API mỗi lần (không cache trong MVP Phase 2)</li>
+            <li>Jira comment API: <code>POST /rest/api/3/issue/{key}/comment</code> asUser()</li>
+            <li>Phase 2 mới xem xét KVS cache nếu profiling cho thấy query &gt; 3s thực sự xảy ra</li>
+            <li>Multi-site verify: tạo record trên Site A, confirm không thấy trên Site B</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     10. GAPS & CHECKLIST
+     ════════════════════════════════════════════ -->
+<section id="s10">
+  <h2>10. Gaps, Điểm cần làm rõ & Checklist tổng thể</h2>
+
+  <h3>10.1 Gaps đã xử lý / còn lại (đối chiếu code <code>timeforge/</code>)</h3>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th><th>Ghi chú</th></tr>
+    <tr><td>Migration versioning</td><td><span class="tag-ok">Done</span></td><td><code>@forge/sql</code> <code>migrationRunner</code> (v001, v002) — không dùng KVS schema version</td></tr>
+    <tr><td>Provider guard</td><td><span class="tag-ok">Done</span></td><td><code>displayConditions.timeTrackingProviderEnabled.key: timeforge-provider</code> trên panel / action / activity</td></tr>
+    <tr><td>Validation + assertSelfOnly</td><td><span class="tag-ok">Done</span></td><td>20 Jest tests; chặn payload.accountId giả mạo</td></tr>
+    <tr><td>Categories hardcode</td><td><span class="tag-ok">Done</span></td><td>dev / review / meeting / ops — Phase 2 mới đưa vào site_config</td></tr>
+    <tr><td>updateTimeEntry (edit draft)</td><td><span class="tag-ok">Done</span></td><td>Issue panel có Sửa / Xóa entry draft</td></tr>
+    <tr><td>Export LIMIT 500 + UTF-8 BOM</td><td><span class="tag-ok">Done</span></td><td>UI warning khi <code>truncated: true</code></td></tr>
+    <tr><td>CI TimeForge</td><td><span class="tag-ok">Done</span></td><td><code>.github/workflows/ci-timeforge.yml</code> — lint + test</td></tr>
+    <tr><td>Date = DATE (YYYY-MM-DD)</td><td><span class="tag-ok">Done</span></td><td>User chọn ngày làm việc; không lưu timezone phức tạp</td></tr>
+    <tr><td>Verify issue khi log</td><td><span class="tag-ok">Done</span></td><td><code>GET /rest/api/3/issue/{key}</code> trước INSERT</td></tr>
+    <tr><td>getWorkLogs allUsers</td><td><span class="tag-ok">Quyết định</span></td><td>Tab Work Log xem tất cả user trên issue (open read trong project)</td></tr>
+    <tr><td>Admin chọn provider</td><td><span class="tag-needed">Manual</span></td><td>Jira Settings → Time tracking → chọn TimeForge — bắt buộc trước demo</td></tr>
+    <tr><td>CD production riêng timeforge</td><td><span class="tag-needed">Tuỳ chọn</span></td><td>Có thể reuse pattern bookmark <code>cd.yml</code></td></tr>
+    <tr><td>Coverage ≥ 80% toàn app</td><td><span class="tag-needed">Partial</span></td><td>Validation 20 tests; chưa mock SQL/Jira end-to-end</td></tr>
+    <tr><td>Archive / alerting</td><td><span class="tag-missing">Phase 2</span></td><td>Không cần cho bảo vệ MVP</td></tr>
+  </table>
+
+  <h3>10.2 Câu hỏi kiến trúc — đã chốt theo code</h3>
+  <table>
+    <tr><th>Câu hỏi</th><th>Quyết định trong <code>timeforge/</code></th></tr>
+    <tr><td>record_type / category</td><td>Hardcode enum MVP</td></tr>
+    <tr><td>Verify Jira issue khi log?</td><td>Có — bắt buộc</td></tr>
+    <tr><td>Date lưu</td><td>DATE local (YYYY-MM-DD)</td></tr>
+    <tr><td>1 resolver function?</td><td>1 <code>handler</code> + migration function riêng</td></tr>
+    <tr><td>Provider UI mapping</td><td><code>issueAction</code> + <code>issueActivity</code> (Forge Preview) — không Connect resources</td></tr>
+  </table>
+
+  <h3>10.3 Checklist Production (Phase 1) — cập nhật</h3>
+  <ul class="checklist">
+    <li>Admin chọn TimeForge làm Time Tracking Provider trên Jira site</li>
+    <li>… → Log Work (TimeForge) mở form; tab Work Log (TimeForge) hiện entries</li>
+    <li>Issue panel chỉ hiện khi provider active (displayConditions)</li>
+    <li><code>logWork</code> / <code>logTimeEntry</code> ghi cùng bảng <code>time_entries</code></li>
+    <li><code>updateTimeEntry</code> / <code>deleteTimeEntry</code> chỉ draft + ownership</li>
+    <li><code>assertSelfOnly</code> trên mọi write resolver</li>
+    <li><code>npm run lint</code> + <code>npm test</code> green (20 tests)</li>
+    <li>Submit tuần idempotent; export CSV có BOM + truncated warning</li>
+    <li>Structured log: start / success / error + durationMs</li>
+    <li>Smoke: log → timesheet → submit → export</li>
+  </ul>
+</section>
+
+<footer style="text-align:center;color:var(--muted);font-size:12px;padding:18px 0 6px">
+  Forge Platform Solution v2.0 — Jira Cloud only · Forge SQL · Multi-site · No external host<br/>
+  Hieu MT · Jun 2026 · Mở trong browser → Ctrl+P để in PDF
+</footer>
+
+</main>
+</div>
+</body>
+</html>

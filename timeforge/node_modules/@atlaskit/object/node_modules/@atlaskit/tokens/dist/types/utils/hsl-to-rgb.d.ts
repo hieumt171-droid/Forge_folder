@@ -1,0 +1,1 @@
+export declare function HSLToRGB(h: number, s: number, l: number): [number, number, number];
