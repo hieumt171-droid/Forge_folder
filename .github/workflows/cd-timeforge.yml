@@ -89,12 +89,16 @@ jobs:
           FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
           FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
 
-      - name: Upgrade install on staging
-        run: >
-          forge install --non-interactive --upgrade
-          --site ${{ env.FORGE_SITE }}
-          --product ${{ env.FORGE_PRODUCT }}
-          -e staging
+      - name: Install or upgrade on staging
+        run: |
+          forge install --non-interactive --upgrade \
+            --site ${{ env.FORGE_SITE }} \
+            --product ${{ env.FORGE_PRODUCT }} \
+            -e staging \
+          || forge install --non-interactive --confirm-scopes \
+            --site ${{ env.FORGE_SITE }} \
+            --product ${{ env.FORGE_PRODUCT }} \
+            -e staging
         env:
           FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
           FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
@@ -138,12 +142,16 @@ jobs:
           FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
           FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
 
-      - name: Upgrade install on production
-        run: >
-          forge install --non-interactive --upgrade
-          --site ${{ env.FORGE_SITE }}
-          --product ${{ env.FORGE_PRODUCT }}
-          -e production
+      - name: Install or upgrade on production
+        run: |
+          forge install --non-interactive --upgrade \
+            --site ${{ env.FORGE_SITE }} \
+            --product ${{ env.FORGE_PRODUCT }} \
+            -e production \
+          || forge install --non-interactive --confirm-scopes \
+            --site ${{ env.FORGE_SITE }} \
+            --product ${{ env.FORGE_PRODUCT }} \
+            -e production
         env:
           FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
           FORGE_API_TOKEN: ${{ secrets.HIEUMT_GITHUB }}
