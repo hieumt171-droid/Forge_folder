@@ -21,6 +21,8 @@ on:
 env:
   FORGE_SITE: hieumt-forge-resource.atlassian.net
   FORGE_PRODUCT: jira
+  # Pin cùng version với local để tránh breaking changes
+  FORGE_CLI_VERSION: '12'
 
 defaults:
   run:
@@ -36,7 +38,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22.22.x < 22.23.1 (bị blacklist) → dùng 22.14.0 ổn định
+          node-version: '22.14.0'
           cache: 'npm'
           cache-dependency-path: timeforge/package-lock.json
 
@@ -63,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.14.0'
           cache: 'npm'
           cache-dependency-path: timeforge/package-lock.json
 
@@ -71,7 +74,7 @@ jobs:
         run: npm ci
 
       - name: Install Forge CLI
-        run: npm install -g @forge/cli@latest
+        run: npm install -g @forge/cli@${{ env.FORGE_CLI_VERSION }}
         working-directory: .
 
       - name: Configure Forge CLI
@@ -112,7 +115,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.14.0'
           cache: 'npm'
           cache-dependency-path: timeforge/package-lock.json
 
@@ -120,7 +123,7 @@ jobs:
         run: npm ci
 
       - name: Install Forge CLI
-        run: npm install -g @forge/cli@latest
+        run: npm install -g @forge/cli@${{ env.FORGE_CLI_VERSION }}
         working-directory: .
 
       - name: Configure Forge CLI
