@@ -2,6 +2,7 @@ const Resolver = require('@forge/resolver').default;
 const api = require('@forge/api');
 const { route } = require('@forge/api');
 const { sql, errorCodes } = require('@forge/sql');
+const ExcelJS = require('exceljs');
 const { createLogger } = require('../lib/logger.js');
 const { applyMigrations } = require('../sql/migration.js');
 const {
@@ -717,7 +718,7 @@ define('reviewWeek', async (req) => {
   };
 });
 
-define('exportTimesheetCsv', async (req) => {
+define('exportTimesheetExcel', async (req) => {
   const viewerAccountId = requireAccountId(req);
   const weekStart = validateLoggedAt(req?.payload?.weekStart);
   const targetAccountId = req?.payload?.targetAccountId
@@ -729,7 +730,7 @@ define('exportTimesheetCsv', async (req) => {
     await assertCanViewTimesheet(viewerAccountId, targetAccountId, weekStart);
   }
 
-  const result = await withSchema('exportTimesheetCsv.sql', () =>
+  const result = await withSchema('exportTimesheetExcel.sql', () =>
     sql
       .prepare(
         `SELECT issue_key, project_key, category, duration_min, logged_at, note, status
@@ -744,61 +745,58 @@ define('exportTimesheetCsv', async (req) => {
 
   const rows = Array.isArray(result?.rows) ? result.rows : [];
   const truncated = rows.length >= EXPORT_ROW_LIMIT;
+  const summaryMap = await fetchIssueSummaries(
+    [...new Set(rows.map((r) => r?.issue_key).filter(Boolean))]
+  );
 
-  const summaryMap = await fetchIssueSummaries([...new Set(rows.map((r) => r?.issue_key).filter(Boolean))]);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'TimeForge';
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet('Timesheet', {
+    views: [{ state: 'frozen', ySplit: 1 }]
+  });
 
-  const headerCols = ['Issue Key', 'Summary', 'Project', 'Work Type', 'Duration (h)', 'Date', 'Note'];
-  const headerCsv = headerCols.join(',');
-  const headerTsv = headerCols.join('\t');
+  sheet.columns = [
+    { header: 'Issue Key', key: 'issueKey', width: 14 },
+    { header: 'Summary', key: 'summary', width: 40 },
+    { header: 'Project', key: 'project', width: 12 },
+    { header: 'Work Type', key: 'workType', width: 14 },
+    { header: 'Duration (h)', key: 'hours', width: 12 },
+    { header: 'Date', key: 'date', width: 12 },
+    { header: 'Note', key: 'note', width: 36 }
+  ];
 
-  const toRow = (r) => {
+  sheet.getRow(1).font = { bold: true };
+
+  for (const r of rows) {
     const key = String(r?.issue_key ?? '');
     const info = summaryMap[key] || {};
-    const summary = String(info.summary ?? '');
-    const workType = String(info.workType || r?.category || '');
-    const note = String(r?.note ?? '');
-    const hours = (Number(r?.duration_min ?? 0) / 60).toFixed(2);
-    return { key, summary, project: String(r?.project_key ?? ''), workType, hours, date: toDateStr(r?.logged_at), note };
-  };
+    sheet.addRow({
+      issueKey: key,
+      summary: String(info.summary ?? ''),
+      project: String(r?.project_key ?? ''),
+      workType: String(info.workType || r?.category || ''),
+      hours: Number(((Number(r?.duration_min ?? 0) / 60).toFixed(2))),
+      date: toDateStr(r?.logged_at),
+      note: String(r?.note ?? '')
+    });
+  }
 
-  const csvLines = rows.map((r) => {
-    const d = toRow(r);
-    const esc = (s) => `"${String(s).replace(/"/g, '""')}"`;
-    return [d.key, esc(d.summary), d.project, esc(d.workType), d.hours, d.date, esc(d.note)].join(',');
-  });
-
-  const tsvLines = rows.map((r) => {
-    const d = toRow(r);
-    return [d.key, d.summary, d.project, d.workType, d.hours, d.date, d.note].join('\t');
-  });
-
-  const csv = `\uFEFF${[headerCsv, ...csvLines].join('\r\n')}`;
-  const tsv = `\uFEFF${[headerTsv, ...tsvLines].join('\r\n')}`;
+  const buffer = await workbook.xlsx.writeBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
   const totalMin = rows.reduce((s, r) => s + Number(r?.duration_min ?? 0), 0);
-  const filename = `timesheet_${weekStart}_to_${weekEnd}.csv`;
+  const filename = `timesheet_${weekStart}_to_${weekEnd}.xlsx`;
 
   return {
-    csv,
-    tsv,
+    base64,
     filename,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     totalMin,
     weekStart,
     weekEnd,
     rowCount: rows.length,
     truncated,
-    limit: EXPORT_ROW_LIMIT,
-    previewRows: rows.slice(0, 20).map((r) => {
-      const d = toRow(r);
-      return {
-        issueKey: d.key,
-        summary: d.summary,
-        projectKey: d.project,
-        workType: d.workType,
-        hours: d.hours,
-        date: d.date,
-        note: d.note
-      };
-    })
+    limit: EXPORT_ROW_LIMIT
   };
 });
 

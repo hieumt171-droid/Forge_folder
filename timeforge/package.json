@@ -23,6 +23,7 @@
     "@forge/react": "11.16.1",
     "@forge/resolver": "1.8.0",
     "@forge/sql": "^3.0.18",
+    "exceljs": "^4.4.0",
     "react": "^18.2.0"
   }
 }

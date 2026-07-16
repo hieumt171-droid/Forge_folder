@@ -16,7 +16,6 @@ import ForgeReconciler, {
   TabPanel,
   Tabs,
   Text,
-  TextArea,
   Textfield,
   User,
   UserPicker
@@ -92,6 +91,26 @@ const approvalLabel = (status) => {
   if (status === 'rejected') return 'Từ chối';
   if (status === 'pending') return 'Chờ duyệt';
   return 'Chưa nộp';
+};
+
+/** Tải file .xlsx từ base64 — UI Kit 2 hỗ trợ Blob + createElement */
+const downloadXlsx = (base64, filename) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'timesheet.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 const Feedback = ({ msg, type, onDismiss }) => {
@@ -222,58 +241,6 @@ const TimesheetGrid = ({ weekStart, data }) => {
   return <DynamicTable head={head} rows={[...dataRows, totalRow]} />;
 };
 
-const ExportPanel = ({ exportData, filename }) => {
-  if (!exportData?.tsv) return null;
-
-  const previewHead = {
-    cells: [
-      { key: 'k', content: 'Key' },
-      { key: 's', content: 'Summary' },
-      { key: 'p', content: 'Project' },
-      { key: 't', content: 'Loại' },
-      { key: 'h', content: 'Giờ' },
-      { key: 'd', content: 'Ngày' }
-    ]
-  };
-
-  const previewRows = (exportData.previewRows ?? []).map((r, i) => ({
-    key: String(i),
-    cells: [
-      { key: 'k', content: <Text>{r.issueKey}</Text> },
-      { key: 's', content: <Text>{r.summary || '—'}</Text> },
-      { key: 'p', content: <Text>{r.projectKey}</Text> },
-      { key: 't', content: <Text>{r.workType}</Text> },
-      { key: 'h', content: <Text>{r.hours}</Text> },
-      { key: 'd', content: <Text>{r.date}</Text> }
-    ]
-  }));
-
-  return (
-    <Stack space="space.200">
-      <SectionMessage appearance="information" title="Xuất Excel — 2 bước">
-        <Text>
-          1. Nhấn vào ô dữ liệu bên dưới → Ctrl+A → Ctrl+C{'\n'}
-          2. Mở Excel → chọn ô A1 → Ctrl+V — Excel tự tách cột (định dạng
-          tab).{'\n'}
-          File gợi ý: <Text weight="bold">{filename}</Text>
-        </Text>
-      </SectionMessage>
-      {previewRows.length > 0 ? (
-        <Stack space="space.050">
-          <Text weight="medium">Xem trước (tối đa 20 dòng)</Text>
-          <DynamicTable head={previewHead} rows={previewRows} />
-        </Stack>
-      ) : null}
-      <TextArea
-        value={exportData.tsv}
-        isReadOnly
-        resize="vertical"
-        minimumRows={8}
-      />
-    </Stack>
-  );
-};
-
 const TimesheetView = ({
   weekStart,
   targetAccountId,
@@ -287,7 +254,6 @@ const TimesheetView = ({
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
-  const [exportData, setExportData] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [approver, setApprover] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
@@ -296,7 +262,6 @@ const TimesheetView = ({
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    setExportData(null);
     try {
       const payload = { weekStart };
       if (targetAccountId) payload.targetAccountId = targetAccountId;
@@ -355,7 +320,10 @@ const TimesheetView = ({
         });
         setFeedback({
           type: 'success',
-          msg: action === 'approve' ? 'Đã duyệt timesheet.' : 'Đã từ chối — người nộp có thể sửa và nộp lại.'
+          msg:
+            action === 'approve'
+              ? 'Đã duyệt timesheet.'
+              : 'Đã từ chối — người nộp có thể sửa và nộp lại.'
         });
         setReviewNote('');
         await load();
@@ -372,21 +340,23 @@ const TimesheetView = ({
   const onExport = useCallback(async () => {
     setExporting(true);
     setFeedback(null);
-    setExportData(null);
     try {
       const payload = { weekStart };
       if (targetAccountId) payload.targetAccountId = targetAccountId;
-      const result = await invoke('exportTimesheetCsv', payload);
-      setExportData(result);
+      const result = await invoke('exportTimesheetExcel', payload);
+      if (!result?.base64) {
+        throw new Error('Không nhận được file Excel từ server.');
+      }
+      downloadXlsx(result.base64, result.filename);
       if (result?.truncated) {
         setFeedback({
           type: 'warning',
-          msg: `Xuất ${result.rowCount} dòng (giới hạn ${result.limit}).`
+          msg: `Đã tải ${result.filename} (${result.rowCount} dòng, giới hạn ${result.limit}).`
         });
       } else {
         setFeedback({
           type: 'success',
-          msg: `Sẵn sàng xuất: ${result?.rowCount ?? 0} dòng · ${fmtMin(result?.totalMin ?? 0)}.`
+          msg: `Đã tải ${result.filename} · ${result?.rowCount ?? 0} dòng · ${fmtMin(result?.totalMin ?? 0)}.`
         });
       }
     } catch (e) {
@@ -400,10 +370,7 @@ const TimesheetView = ({
   const weekTotal = data?.weekTotal ?? 0;
   const byType = data?.byWorkType || data?.byCategory || {};
   const status = data?.approvalStatus;
-  const canSubmit =
-    showSubmit &&
-    !isEmpty &&
-    (!status || status === 'rejected');
+  const canSubmit = showSubmit && !isEmpty && (!status || status === 'rejected');
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
   const isRejected = status === 'rejected';
@@ -478,7 +445,7 @@ const TimesheetView = ({
                 isDisabled={isEmpty}
                 onClick={onExport}
               >
-                Xuất Excel
+                Export Excel
               </LoadingButton>
               <Button appearance="subtle" onClick={load}>
                 Refresh
@@ -579,8 +546,6 @@ const TimesheetView = ({
               </Inline>
             </Stack>
           ) : null}
-
-          <ExportPanel exportData={exportData} filename={exportData?.filename} />
         </Stack>
       )}
     </Stack>
@@ -729,7 +694,7 @@ const App = () => (
     <Stack space="space.050">
       <Heading size="medium">Timesheet</Heading>
       <Text>
-        Ghi giờ · nộp duyệt · xuất Excel — chỉ người nộp và người duyệt xem
+        Ghi giờ · nộp duyệt · export Excel — chỉ người nộp và người duyệt xem
         được timesheet đã nộp
       </Text>
     </Stack>
