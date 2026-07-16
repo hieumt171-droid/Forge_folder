@@ -137,3 +137,19 @@ describe('EXPORT_ROW_LIMIT', () => {
     expect(EXPORT_ROW_LIMIT).toBe(500);
   });
 });
+
+describe('validateAccountId', () => {
+  const { validateAccountId, validateReviewAction } = require('../validation.js');
+
+  test('chấp nhận account id hợp lệ', () => {
+    expect(validateAccountId('abc-123')).toBe('abc-123');
+  });
+  test('từ chối rỗng', () => {
+    expect(() => validateAccountId('')).toThrow('bắt buộc');
+  });
+  test('validateReviewAction', () => {
+    expect(validateReviewAction('approve')).toBe('approve');
+    expect(validateReviewAction('REJECT')).toBe('reject');
+    expect(() => validateReviewAction('maybe')).toThrow();
+  });
+});

@@ -76,6 +76,23 @@ const validateEntryId = (raw) => {
   return id;
 };
 
+const validateAccountId = (raw, label = 'accountId') => {
+  const id = String(raw ?? '').trim();
+  if (!id) throw new Error(`${label} là bắt buộc.`);
+  if (id.length > 128) throw new Error(`${label} không hợp lệ.`);
+  return id;
+};
+
+const VALID_REVIEW_ACTIONS = ['approve', 'reject'];
+
+const validateReviewAction = (raw) => {
+  const action = String(raw ?? '').trim().toLowerCase();
+  if (!VALID_REVIEW_ACTIONS.includes(action)) {
+    throw new Error('action phải là approve hoặc reject.');
+  }
+  return action;
+};
+
 module.exports = {
   ISSUE_KEY_REGEX,
   VALID_CATEGORIES,
@@ -90,5 +107,8 @@ module.exports = {
   validateDurationMin,
   validateLoggedAt,
   validateNote,
-  validateEntryId
+  validateEntryId,
+  validateAccountId,
+  validateReviewAction,
+  VALID_REVIEW_ACTIONS
 };

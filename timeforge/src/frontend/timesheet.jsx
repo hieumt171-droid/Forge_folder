@@ -5,13 +5,21 @@ import ForgeReconciler, {
   EmptyState,
   Heading,
   Inline,
+  Label,
   LoadingButton,
   Lozenge,
   SectionMessage,
   Spinner,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
   Text,
-  TextArea
+  TextArea,
+  Textfield,
+  User,
+  UserPicker
 } from '@forge/react';
 import { invoke } from '@forge/bridge';
 
@@ -50,7 +58,6 @@ const dayMeta = (ymd) => {
   };
 };
 
-/** Giờ dạng số thập phân như timesheet chuẩn (1.5) */
 const fmtHours = (min) => {
   const m = Number(min) || 0;
   if (!m) return '';
@@ -71,6 +78,20 @@ const fmtRange = (start, end) => {
   const a = start.split('-');
   const b = end.split('-');
   return `${a[2]}/${a[1]}/${a[0].slice(2)} – ${b[2]}/${b[1]}/${b[0].slice(2)}`;
+};
+
+const approvalAppearance = (status) => {
+  if (status === 'approved') return 'success';
+  if (status === 'rejected') return 'removed';
+  if (status === 'pending') return 'inprogress';
+  return 'default';
+};
+
+const approvalLabel = (status) => {
+  if (status === 'approved') return 'Đã duyệt';
+  if (status === 'rejected') return 'Từ chối';
+  if (status === 'pending') return 'Chờ duyệt';
+  return 'Chưa nộp';
 };
 
 const Feedback = ({ msg, type, onDismiss }) => {
@@ -148,10 +169,7 @@ const TimesheetGrid = ({ weekStart, data }) => {
           </Text>
         )
       },
-      {
-        key: 'key',
-        content: <Text>{r.issueKey}</Text>
-      },
+      { key: 'key', content: <Text>{r.issueKey}</Text> },
       {
         key: 'type',
         content: r.workType ? (
@@ -204,54 +222,117 @@ const TimesheetGrid = ({ weekStart, data }) => {
   return <DynamicTable head={head} rows={[...dataRows, totalRow]} />;
 };
 
-const App = () => {
-  const [weekStart, setWeekStart] = useState(currentWeekStart());
+const ExportPanel = ({ exportData, filename }) => {
+  if (!exportData?.tsv) return null;
+
+  const previewHead = {
+    cells: [
+      { key: 'k', content: 'Key' },
+      { key: 's', content: 'Summary' },
+      { key: 'p', content: 'Project' },
+      { key: 't', content: 'Loại' },
+      { key: 'h', content: 'Giờ' },
+      { key: 'd', content: 'Ngày' }
+    ]
+  };
+
+  const previewRows = (exportData.previewRows ?? []).map((r, i) => ({
+    key: String(i),
+    cells: [
+      { key: 'k', content: <Text>{r.issueKey}</Text> },
+      { key: 's', content: <Text>{r.summary || '—'}</Text> },
+      { key: 'p', content: <Text>{r.projectKey}</Text> },
+      { key: 't', content: <Text>{r.workType}</Text> },
+      { key: 'h', content: <Text>{r.hours}</Text> },
+      { key: 'd', content: <Text>{r.date}</Text> }
+    ]
+  }));
+
+  return (
+    <Stack space="space.200">
+      <SectionMessage appearance="information" title="Xuất Excel — 2 bước">
+        <Text>
+          1. Nhấn vào ô dữ liệu bên dưới → Ctrl+A → Ctrl+C{'\n'}
+          2. Mở Excel → chọn ô A1 → Ctrl+V — Excel tự tách cột (định dạng
+          tab).{'\n'}
+          File gợi ý: <Text weight="bold">{filename}</Text>
+        </Text>
+      </SectionMessage>
+      {previewRows.length > 0 ? (
+        <Stack space="space.050">
+          <Text weight="medium">Xem trước (tối đa 20 dòng)</Text>
+          <DynamicTable head={previewHead} rows={previewRows} />
+        </Stack>
+      ) : null}
+      <TextArea
+        value={exportData.tsv}
+        isReadOnly
+        resize="vertical"
+        minimumRows={8}
+      />
+    </Stack>
+  );
+};
+
+const TimesheetView = ({
+  weekStart,
+  targetAccountId,
+  showSubmit,
+  showReviewActions,
+  onReviewed
+}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [csvContent, setCsvContent] = useState('');
-  const [csvFilename, setCsvFilename] = useState('');
+  const [reviewing, setReviewing] = useState(false);
+  const [exportData, setExportData] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [approver, setApprover] = useState(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    setCsvContent('');
+    setExportData(null);
     try {
-      const result = await invoke('getMyTimesheet', { weekStart });
+      const payload = { weekStart };
+      if (targetAccountId) payload.targetAccountId = targetAccountId;
+      const result = await invoke('getTimesheet', payload);
       setData(result);
     } catch (e) {
       setError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
-  }, [weekStart]);
+  }, [weekStart, targetAccountId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const onPrev = useCallback(() => setWeekStart((ws) => addDays(ws, -7)), []);
-  const onNext = useCallback(() => setWeekStart((ws) => addDays(ws, 7)), []);
-  const onThisWeek = useCallback(() => setWeekStart(currentWeekStart()), []);
-
   const onSubmit = useCallback(async () => {
+    if (!approver?.id) {
+      setFeedback({ type: 'error', msg: 'Chọn người duyệt trước khi nộp.' });
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
-      const result = await invoke('submitWeek', { weekStart });
+      const result = await invoke('submitWeek', {
+        weekStart,
+        approverAccountId: approver.id
+      });
       if (result?.alreadySubmitted) {
-        setFeedback({
-          type: 'warning',
-          msg: `Tuần ${weekStart} đã được nộp trước đó.`
-        });
+        setFeedback({ type: 'warning', msg: `Tuần ${weekStart} đang chờ duyệt.` });
       } else {
         setFeedback({
           type: 'success',
-          msg: `Đã nộp ${result?.submittedCount ?? 0} entries · cột “Nộp tuần” trên Work Log sẽ thành Đã nộp.`
+          msg: `Đã nộp ${result?.submittedCount ?? 0} entries · chờ người duyệt xác nhận.`
         });
+        setShowSubmitForm(false);
       }
       await load();
     } catch (e) {
@@ -259,25 +340,53 @@ const App = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [weekStart, load]);
+  }, [weekStart, approver, load]);
+
+  const onReview = useCallback(
+    async (action) => {
+      setReviewing(true);
+      setFeedback(null);
+      try {
+        await invoke('reviewWeek', {
+          submitterAccountId: targetAccountId,
+          weekStart,
+          action,
+          reviewNote
+        });
+        setFeedback({
+          type: 'success',
+          msg: action === 'approve' ? 'Đã duyệt timesheet.' : 'Đã từ chối — người nộp có thể sửa và nộp lại.'
+        });
+        setReviewNote('');
+        await load();
+        onReviewed?.();
+      } catch (e) {
+        setFeedback({ type: 'error', msg: e?.message || String(e) });
+      } finally {
+        setReviewing(false);
+      }
+    },
+    [targetAccountId, weekStart, reviewNote, load, onReviewed]
+  );
 
   const onExport = useCallback(async () => {
     setExporting(true);
     setFeedback(null);
-    setCsvContent('');
+    setExportData(null);
     try {
-      const result = await invoke('exportTimesheetCsv', { weekStart });
-      setCsvContent(result?.csv ?? '');
-      setCsvFilename(result?.filename ?? `timesheet_${weekStart}.csv`);
+      const payload = { weekStart };
+      if (targetAccountId) payload.targetAccountId = targetAccountId;
+      const result = await invoke('exportTimesheetCsv', payload);
+      setExportData(result);
       if (result?.truncated) {
         setFeedback({
           type: 'warning',
-          msg: `Xuất ${result.rowCount} dòng (đã giới hạn ${result.limit}). Chọn khoảng tuần ngắn hơn nếu cần đầy đủ.`
+          msg: `Xuất ${result.rowCount} dòng (giới hạn ${result.limit}).`
         });
       } else {
         setFeedback({
           type: 'success',
-          msg: `Sẵn sàng: ${result?.rowCount ?? 0} dòng · tổng ${fmtMin(result?.totalMin ?? 0)}.`
+          msg: `Sẵn sàng xuất: ${result?.rowCount ?? 0} dòng · ${fmtMin(result?.totalMin ?? 0)}.`
         });
       }
     } catch (e) {
@@ -285,43 +394,22 @@ const App = () => {
     } finally {
       setExporting(false);
     }
-  }, [weekStart]);
+  }, [weekStart, targetAccountId]);
 
   const isEmpty = !data || (data.rows ?? []).length === 0;
-  const capacity = data?.capacityMin ?? 5 * 8 * 60;
   const weekTotal = data?.weekTotal ?? 0;
   const byType = data?.byWorkType || data?.byCategory || {};
+  const status = data?.approvalStatus;
+  const canSubmit =
+    showSubmit &&
+    !isEmpty &&
+    (!status || status === 'rejected');
+  const isPending = status === 'pending';
+  const isApproved = status === 'approved';
+  const isRejected = status === 'rejected';
 
   return (
-    <Stack space="space.250">
-      <Inline space="space.100" alignBlock="center" spread="space-between">
-        <Stack space="space.050">
-          <Heading size="medium">Timesheet</Heading>
-          <Text>Lưới giờ theo work item · nộp tuần · xuất CSV</Text>
-        </Stack>
-        <Inline space="space.100">
-          {data?.submitted ? (
-            <Lozenge appearance="success">Period submitted</Lozenge>
-          ) : (
-            <LoadingButton
-              appearance="primary"
-              isLoading={submitting}
-              isDisabled={isEmpty}
-              onClick={onSubmit}
-            >
-              Submit Period
-            </LoadingButton>
-          )}
-        </Inline>
-      </Inline>
-
-      <PeriodBar
-        weekStart={weekStart}
-        onPrev={onPrev}
-        onNext={onNext}
-        onThisWeek={onThisWeek}
-      />
-
+    <Stack space="space.200">
       <Feedback
         msg={feedback?.msg}
         type={feedback?.type}
@@ -339,14 +427,42 @@ const App = () => {
         </Stack>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && data && (
         <Stack space="space.200">
+          <Inline space="space.100" alignBlock="center" shouldWrap>
+            {targetAccountId ? (
+              <Inline space="space.050" alignBlock="center">
+                <Text>Người nộp:</Text>
+                <User accountId={targetAccountId} />
+              </Inline>
+            ) : null}
+            {status ? (
+              <Lozenge appearance={approvalAppearance(status)}>
+                {approvalLabel(status)}
+              </Lozenge>
+            ) : (
+              <Lozenge appearance="default">Nháp</Lozenge>
+            )}
+            {data.approverAccountId ? (
+              <Inline space="space.050" alignBlock="center">
+                <Text>Người duyệt:</Text>
+                <User accountId={data.approverAccountId} />
+              </Inline>
+            ) : null}
+          </Inline>
+
+          {isRejected && data.reviewNote ? (
+            <SectionMessage appearance="warning" title="Lý do từ chối">
+              <Text>{data.reviewNote}</Text>
+            </SectionMessage>
+          ) : null}
+
           <Inline space="space.100" alignBlock="center" spread="space-between">
             <Inline space="space.100" alignBlock="center" shouldWrap>
               <Text>
-                Total Hours{' '}
+                Total{' '}
                 <Text weight="bold">
-                  {fmtHours(weekTotal) || '0'} of {fmtHours(capacity)}
+                  {fmtHours(weekTotal) || '0'} / {fmtHours(data.capacityMin)}
                 </Text>
               </Text>
               {Object.keys(byType).map((t) => (
@@ -356,14 +472,14 @@ const App = () => {
               ))}
             </Inline>
             <Inline space="space.100">
-            <LoadingButton
-              appearance="default"
-              isLoading={exporting}
-              isDisabled={isEmpty}
-              onClick={onExport}
-            >
-              Export CSV (Excel)
-            </LoadingButton>
+              <LoadingButton
+                appearance="default"
+                isLoading={exporting}
+                isDisabled={isEmpty}
+                onClick={onExport}
+              >
+                Xuất Excel
+              </LoadingButton>
               <Button appearance="subtle" onClick={load}>
                 Refresh
               </Button>
@@ -373,37 +489,265 @@ const App = () => {
           {isEmpty ? (
             <EmptyState
               header="Chưa có giờ trong tuần này"
-              description="Mở issue → Log Work (TimeForge) hoặc panel TimeForge → ghi giờ, rồi quay lại đây."
+              description="Mở issue → Log Work (TimeForge) hoặc panel TimeForge → ghi giờ."
             />
           ) : (
             <TimesheetGrid weekStart={weekStart} data={data} />
           )}
 
-          {csvContent ? (
-            <Stack space="space.200">
-              <SectionMessage appearance="information" title={`File: ${csvFilename}`}>
+          {canSubmit && !showSubmitForm ? (
+            <Button appearance="primary" onClick={() => setShowSubmitForm(true)}>
+              Nộp timesheet tuần này
+            </Button>
+          ) : null}
+
+          {canSubmit && showSubmitForm ? (
+            <Stack space="space.150">
+              <SectionMessage appearance="information" title="Nộp để duyệt">
                 <Text>
-                  Forge không tải file trực tiếp. Làm theo 3 bước:{'\n'}
-                  1. Nhấn vào ô CSV bên dưới → Ctrl+A → Ctrl+C{'\n'}
-                  2. Mở Notepad → Ctrl+V → File → Save As{'\n'}
-                  3. Đặt tên <Text weight="bold">{csvFilename}</Text>, chọn Encoding:{' '}
-                  <Text weight="bold">UTF-8</Text>, lưu.{'\n'}
-                  Sau đó mở file bằng Excel — Excel sẽ nhận đúng tiếng Việt.
+                  Chọn người duyệt (PM / team lead). Sau khi nộp, chỉ bạn và
+                  người duyệt mới xem được timesheet tuần này.
                 </Text>
               </SectionMessage>
-              <TextArea
-                value={csvContent}
-                isReadOnly
-                resize="vertical"
-                minimumRows={10}
+              <UserPicker
+                name="approver"
+                label="Người duyệt"
+                placeholder="Tìm tên hoặc email..."
+                isRequired
+                onChange={(user) => setApprover(user)}
               />
+              <Inline space="space.100">
+                <LoadingButton
+                  appearance="primary"
+                  isLoading={submitting}
+                  isDisabled={!approver?.id}
+                  onClick={onSubmit}
+                >
+                  Gửi duyệt
+                </LoadingButton>
+                <Button appearance="subtle" onClick={() => setShowSubmitForm(false)}>
+                  Hủy
+                </Button>
+              </Inline>
             </Stack>
           ) : null}
+
+          {isPending && !showReviewActions ? (
+            <SectionMessage appearance="information" title="Đang chờ duyệt">
+              <Text>
+                Timesheet đã nộp. Bạn không thể sửa entry cho đến khi được
+                duyệt hoặc bị từ chối.
+              </Text>
+            </SectionMessage>
+          ) : null}
+
+          {isApproved ? (
+            <SectionMessage appearance="success" title="Đã duyệt">
+              <Text>Timesheet tuần này đã được duyệt.</Text>
+            </SectionMessage>
+          ) : null}
+
+          {showReviewActions && data.canReview ? (
+            <Stack space="space.150">
+              <SectionMessage appearance="warning" title="Duyệt timesheet">
+                <Text>Xem kỹ bảng giờ bên trên trước khi duyệt hoặc từ chối.</Text>
+              </SectionMessage>
+              <Stack space="space.050">
+                <Label labelFor="review-note">Ghi chú (bắt buộc khi từ chối)</Label>
+                <Textfield
+                  id="review-note"
+                  value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                  placeholder="Ví dụ: thiếu giờ thứ 4, cần bổ sung note..."
+                />
+              </Stack>
+              <Inline space="space.100">
+                <LoadingButton
+                  appearance="primary"
+                  isLoading={reviewing}
+                  onClick={() => onReview('approve')}
+                >
+                  Duyệt
+                </LoadingButton>
+                <LoadingButton
+                  appearance="danger"
+                  isLoading={reviewing}
+                  onClick={() => onReview('reject')}
+                >
+                  Từ chối
+                </LoadingButton>
+              </Inline>
+            </Stack>
+          ) : null}
+
+          <ExportPanel exportData={exportData} filename={exportData?.filename} />
         </Stack>
       )}
     </Stack>
   );
 };
+
+const ReviewTab = () => {
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await invoke('getPendingApprovals', {});
+      setItems(Array.isArray(result?.items) ? result.items : []);
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load, refreshToken]);
+
+  if (selected) {
+    return (
+      <Stack space="space.200">
+        <Inline space="space.100" alignBlock="center">
+          <Button appearance="subtle" onClick={() => setSelected(null)}>
+            ← Danh sách chờ duyệt
+          </Button>
+          <Heading size="xsmall">
+            Duyệt tuần {fmtRange(selected.weekStart, selected.weekEnd)}
+          </Heading>
+        </Inline>
+        <TimesheetView
+          weekStart={selected.weekStart}
+          targetAccountId={selected.submitterAccountId}
+          showSubmit={false}
+          showReviewActions
+          onReviewed={() => {
+            setSelected(null);
+            setRefreshToken((n) => n + 1);
+          }}
+        />
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack space="space.200">
+      <Inline space="space.100" alignBlock="center" spread="space-between">
+        <Text>Timesheet đang chờ bạn duyệt</Text>
+        <Button appearance="subtle" onClick={load}>
+          Làm mới
+        </Button>
+      </Inline>
+
+      {loading && <Spinner label="Đang tải..." />}
+      {!loading && error && (
+        <SectionMessage appearance="error" title="Lỗi">
+          <Text>{error}</Text>
+        </SectionMessage>
+      )}
+      {!loading && !error && items.length === 0 && (
+        <EmptyState
+          header="Không có timesheet chờ duyệt"
+          description="Khi ai đó nộp timesheet và chọn bạn làm người duyệt, sẽ hiện ở đây."
+        />
+      )}
+      {!loading && !error && items.length > 0 && (
+        <DynamicTable
+          head={{
+            cells: [
+              { key: 'user', content: 'Người nộp' },
+              { key: 'week', content: 'Tuần' },
+              { key: 'submitted', content: 'Nộp lúc' },
+              { key: 'act', content: '' }
+            ]
+          }}
+          rows={items.map((item) => ({
+            key: `${item.submitterAccountId}-${item.weekStart}`,
+            cells: [
+              {
+                key: 'user',
+                content: <User accountId={item.submitterAccountId} />
+              },
+              {
+                key: 'week',
+                content: <Text>{fmtRange(item.weekStart, item.weekEnd)}</Text>
+              },
+              {
+                key: 'submitted',
+                content: (
+                  <Text>
+                    {item.submittedAt
+                      ? item.submittedAt.slice(0, 16).replace('T', ' ')
+                      : '—'}
+                  </Text>
+                )
+              },
+              {
+                key: 'act',
+                content: (
+                  <Button appearance="primary" onClick={() => setSelected(item)}>
+                    Xem & duyệt
+                  </Button>
+                )
+              }
+            ]
+          }))}
+        />
+      )}
+    </Stack>
+  );
+};
+
+const MyTimesheetTab = () => {
+  const [weekStart, setWeekStart] = useState(currentWeekStart());
+
+  const onPrev = useCallback(() => setWeekStart((ws) => addDays(ws, -7)), []);
+  const onNext = useCallback(() => setWeekStart((ws) => addDays(ws, 7)), []);
+  const onThisWeek = useCallback(() => setWeekStart(currentWeekStart()), []);
+
+  return (
+    <Stack space="space.200">
+      <PeriodBar
+        weekStart={weekStart}
+        onPrev={onPrev}
+        onNext={onNext}
+        onThisWeek={onThisWeek}
+      />
+      <TimesheetView weekStart={weekStart} showSubmit />
+    </Stack>
+  );
+};
+
+const App = () => (
+  <Stack space="space.250">
+    <Stack space="space.050">
+      <Heading size="medium">Timesheet</Heading>
+      <Text>
+        Ghi giờ · nộp duyệt · xuất Excel — chỉ người nộp và người duyệt xem
+        được timesheet đã nộp
+      </Text>
+    </Stack>
+
+    <Tabs id="timesheet-main-tabs">
+      <TabList>
+        <Tab>Timesheet của tôi</Tab>
+        <Tab>Chờ duyệt</Tab>
+      </TabList>
+      <TabPanel>
+        <MyTimesheetTab />
+      </TabPanel>
+      <TabPanel>
+        <ReviewTab />
+      </TabPanel>
+    </Tabs>
+  </Stack>
+);
 
 ForgeReconciler.render(
   <React.StrictMode>

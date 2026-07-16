@@ -29,10 +29,26 @@ const ALTER_CATEGORY_TO_WORK_TYPE = `
 ALTER TABLE time_entries MODIFY COLUMN category VARCHAR(64) NOT NULL
 `;
 
+/** Luồng duyệt timesheet: người nộp chọn approver, chỉ 2 bên xem được */
+const ALTER_WEEK_SUBMISSIONS_APPROVAL = `
+ALTER TABLE week_submissions
+  ADD COLUMN approver_account_id VARCHAR(128) NULL,
+  ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  ADD COLUMN reviewed_at TIMESTAMP NULL,
+  ADD COLUMN review_note VARCHAR(500) NOT NULL DEFAULT ''
+`;
+
+/** Dữ liệu nộp cũ (trước khi có duyệt) coi như đã duyệt */
+const BACKFILL_LEGACY_SUBMISSIONS = `
+UPDATE week_submissions SET approval_status = 'approved' WHERE approver_account_id IS NULL
+`;
+
 const chain = migrationRunner
   .enqueue('v001_create_time_entries', CREATE_TIME_ENTRIES)
   .enqueue('v002_create_week_submissions', CREATE_WEEK_SUBMISSIONS)
-  .enqueue('v003_category_work_type', ALTER_CATEGORY_TO_WORK_TYPE);
+  .enqueue('v003_category_work_type', ALTER_CATEGORY_TO_WORK_TYPE)
+  .enqueue('v004_week_submissions_approval', ALTER_WEEK_SUBMISSIONS_APPROVAL)
+  .enqueue('v005_backfill_legacy_submissions', BACKFILL_LEGACY_SUBMISSIONS);
 
 const applyMigrations = async () => {
   return chain.run();

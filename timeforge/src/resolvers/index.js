@@ -5,12 +5,15 @@ const { sql, errorCodes } = require('@forge/sql');
 const { createLogger } = require('../lib/logger.js');
 const { applyMigrations } = require('../sql/migration.js');
 const {
+  requireAccountId,
   assertSelfOnly,
   validateIssueKey,
   validateDurationMin,
   validateLoggedAt,
   validateNote,
   validateEntryId,
+  validateAccountId,
+  validateReviewAction,
   EXPORT_ROW_LIMIT
 } = require('./validation.js');
 
@@ -124,6 +127,131 @@ const fmtMin = (m) => {
   if (h > 0 && rest > 0) return `${h}h ${rest}m`;
   if (h > 0) return `${h}h`;
   return `${rest}m`;
+};
+
+const mapSubmissionRow = (row) => {
+  if (!row) return null;
+  return {
+    submitterAccountId: String(row?.account_id ?? ''),
+    weekStart: toDateStr(row?.week_start),
+    submittedAt: row?.submitted_at ? String(row.submitted_at) : '',
+    approverAccountId: String(row?.approver_account_id ?? ''),
+    approvalStatus: String(row?.approval_status ?? 'pending'),
+    reviewedAt: row?.reviewed_at ? String(row.reviewed_at) : '',
+    reviewNote: String(row?.review_note ?? '')
+  };
+};
+
+const loadWeekSubmission = async (submitterAccountId, weekStart) => {
+  const result = await withSchema('loadWeekSubmission', () =>
+    sql
+      .prepare(
+        `SELECT account_id, week_start, submitted_at, approver_account_id,
+                approval_status, reviewed_at, review_note
+         FROM week_submissions
+         WHERE account_id = ? AND week_start = ?`
+      )
+      .bindParams(submitterAccountId, weekStart)
+      .execute()
+  );
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  return rows.length > 0 ? mapSubmissionRow(rows[0]) : null;
+};
+
+/** Chỉ người nộp hoặc người duyệt được xem timesheet tuần đã nộp */
+const assertCanViewTimesheet = async (viewerAccountId, submitterAccountId, weekStart) => {
+  if (String(viewerAccountId) === String(submitterAccountId)) return;
+  const submission = await loadWeekSubmission(submitterAccountId, weekStart);
+  if (!submission) {
+    throw new Error('Timesheet tuần này chưa được nộp — chỉ người nộp mới xem được.');
+  }
+  if (String(submission.approverAccountId) !== String(viewerAccountId)) {
+    throw new Error('Bạn không có quyền xem timesheet này. Chỉ người nộp và người duyệt được xem.');
+  }
+};
+
+const buildTimesheetData = async (submitterAccountId, weekStart) => {
+  const weekEnd = addDays(weekStart, 6);
+
+  const [entriesResult, submission, categoryResult] = await Promise.all([
+    withSchema('buildTimesheet.entries', () =>
+      sql
+        .prepare(
+          `SELECT issue_key, project_key, category, logged_at, SUM(duration_min) AS total_min
+           FROM time_entries
+           WHERE account_id = ? AND logged_at >= ? AND logged_at <= ?
+           GROUP BY issue_key, project_key, category, logged_at
+           ORDER BY issue_key ASC, logged_at ASC`
+        )
+        .bindParams(submitterAccountId, weekStart, weekEnd)
+        .execute()
+    ),
+    loadWeekSubmission(submitterAccountId, weekStart),
+    withSchema('buildTimesheet.byCategory', () =>
+      sql
+        .prepare(
+          `SELECT category, SUM(duration_min) AS total_min
+           FROM time_entries
+           WHERE account_id = ? AND logged_at >= ? AND logged_at <= ?
+           GROUP BY category`
+        )
+        .bindParams(submitterAccountId, weekStart, weekEnd)
+        .execute()
+    )
+  ]);
+
+  const rawRows = Array.isArray(entriesResult?.rows) ? entriesResult.rows : [];
+  const grouped = {};
+  for (const row of rawRows) {
+    const key = String(row?.issue_key ?? '');
+    const day = toDateStr(row?.logged_at);
+    const min = Number(row?.total_min ?? 0);
+    const category = String(row?.category ?? '').trim();
+    if (!grouped[key]) {
+      grouped[key] = {
+        issueKey: key,
+        projectKey: String(row?.project_key ?? ''),
+        workType: category,
+        days: {},
+        total: 0
+      };
+    }
+    if (!grouped[key].workType && category) grouped[key].workType = category;
+    grouped[key].days[day] = (grouped[key].days[day] || 0) + min;
+    grouped[key].total += min;
+  }
+
+  const rows = Object.values(grouped).sort((a, b) => a.issueKey.localeCompare(b.issueKey));
+  const weekTotal = rows.reduce((s, r) => s + r.total, 0);
+
+  const byCategory = {};
+  for (const row of Array.isArray(categoryResult?.rows) ? categoryResult.rows : []) {
+    byCategory[String(row?.category ?? '')] = Number(row?.total_min ?? 0);
+  }
+
+  const summaries = await fetchIssueSummaries(rows.map((r) => r.issueKey));
+  for (const r of rows) {
+    const info = summaries[r.issueKey] || {};
+    r.summary = info.summary || r.issueKey;
+    r.workType = info.workType || r.workType || '';
+  }
+
+  return {
+    weekStart,
+    weekEnd,
+    rows,
+    weekTotal,
+    byCategory,
+    byWorkType: byCategory,
+    submission,
+    submitted: Boolean(submission),
+    approvalStatus: submission?.approvalStatus ?? null,
+    approverAccountId: submission?.approverAccountId ?? null,
+    reviewedAt: submission?.reviewedAt ?? null,
+    reviewNote: submission?.reviewNote ?? null,
+    capacityMin: 5 * 8 * 60,
+    submitterAccountId
+  };
 };
 
 const loadOwnedEntry = async (label, id, accountId) => {
@@ -379,108 +507,99 @@ define('deleteTimeEntry', async (req) => {
   return { success: true, deletedId: id };
 });
 
-define('getMyTimesheet', async (req) => {
-  const accountId = assertSelfOnly(req);
+define('getTimesheet', async (req) => {
+  const viewerAccountId = requireAccountId(req);
   const weekStart = validateLoggedAt(req?.payload?.weekStart);
-  const weekEnd = addDays(weekStart, 6);
+  const targetAccountId = req?.payload?.targetAccountId
+    ? validateAccountId(req.payload.targetAccountId, 'targetAccountId')
+    : viewerAccountId;
 
-  const [entriesResult, submissionResult, categoryResult] = await Promise.all([
-    withSchema('getMyTimesheet.entries', () =>
-      sql
-        .prepare(
-          `SELECT issue_key, project_key, category, logged_at, SUM(duration_min) AS total_min
-           FROM time_entries
-           WHERE account_id = ? AND logged_at >= ? AND logged_at <= ?
-           GROUP BY issue_key, project_key, category, logged_at
-           ORDER BY issue_key ASC, logged_at ASC`
-        )
-        .bindParams(accountId, weekStart, weekEnd)
-        .execute()
-    ),
-    withSchema('getMyTimesheet.submission', () =>
-      sql
-        .prepare(`SELECT account_id FROM week_submissions WHERE account_id = ? AND week_start = ?`)
-        .bindParams(accountId, weekStart)
-        .execute()
-    ),
-    withSchema('getMyTimesheet.byCategory', () =>
-      sql
-        .prepare(
-          `SELECT category, SUM(duration_min) AS total_min
-           FROM time_entries
-           WHERE account_id = ? AND logged_at >= ? AND logged_at <= ?
-           GROUP BY category`
-        )
-        .bindParams(accountId, weekStart, weekEnd)
-        .execute()
-    )
-  ]);
-
-  const rawRows = Array.isArray(entriesResult?.rows) ? entriesResult.rows : [];
-  const submitted =
-    (Array.isArray(submissionResult?.rows) ? submissionResult.rows : []).length > 0;
-
-  const grouped = {};
-  for (const row of rawRows) {
-    const key = String(row?.issue_key ?? '');
-    const day = toDateStr(row?.logged_at);
-    const min = Number(row?.total_min ?? 0);
-    const category = String(row?.category ?? '').trim();
-    if (!grouped[key]) {
-      grouped[key] = {
-        issueKey: key,
-        projectKey: String(row?.project_key ?? ''),
-        workType: category,
-        days: {},
-        total: 0
-      };
-    }
-    if (!grouped[key].workType && category) grouped[key].workType = category;
-    grouped[key].days[day] = (grouped[key].days[day] || 0) + min;
-    grouped[key].total += min;
+  if (String(targetAccountId) !== String(viewerAccountId)) {
+    await assertCanViewTimesheet(viewerAccountId, targetAccountId, weekStart);
   }
 
-  const rows = Object.values(grouped).sort((a, b) => a.issueKey.localeCompare(b.issueKey));
-  const weekTotal = rows.reduce((s, r) => s + r.total, 0);
-
-  const byCategory = {};
-  for (const row of Array.isArray(categoryResult?.rows) ? categoryResult.rows : []) {
-    byCategory[String(row?.category ?? '')] = Number(row?.total_min ?? 0);
-  }
-
-  const summaries = await fetchIssueSummaries(rows.map((r) => r.issueKey));
-  for (const r of rows) {
-    const info = summaries[r.issueKey] || {};
-    r.summary = info.summary || r.issueKey;
-    r.workType = info.workType || r.workType || '';
-  }
+  const data = await buildTimesheetData(targetAccountId, weekStart);
+  const canReview =
+    String(viewerAccountId) === String(data.approverAccountId) &&
+    data.approvalStatus === 'pending';
 
   return {
-    weekStart,
-    weekEnd,
-    rows,
-    weekTotal,
-    byCategory,
-    byWorkType: byCategory,
-    submitted,
-    capacityMin: 5 * 8 * 60
+    ...data,
+    viewerAccountId,
+    canReview,
+    isOwner: String(viewerAccountId) === String(targetAccountId)
+  };
+});
+
+/** Giữ tương thích frontend cũ */
+define('getMyTimesheet', async (req) => {
+  const viewerAccountId = requireAccountId(req);
+  const weekStart = validateLoggedAt(req?.payload?.weekStart);
+  const data = await buildTimesheetData(viewerAccountId, weekStart);
+  return {
+    ...data,
+    submitted: data.submitted,
+    canReview: false,
+    isOwner: true
+  };
+});
+
+define('getPendingApprovals', async (req) => {
+  const approverAccountId = requireAccountId(req);
+
+  const result = await withSchema('getPendingApprovals', () =>
+    sql
+      .prepare(
+        `SELECT account_id, week_start, submitted_at, approval_status, review_note
+         FROM week_submissions
+         WHERE approver_account_id = ? AND approval_status = 'pending'
+         ORDER BY submitted_at ASC
+         LIMIT 50`
+      )
+      .bindParams(approverAccountId)
+      .execute()
+  );
+
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  return {
+    items: rows.map((r) => ({
+      submitterAccountId: String(r?.account_id ?? ''),
+      weekStart: toDateStr(r?.week_start),
+      weekEnd: addDays(toDateStr(r?.week_start), 6),
+      submittedAt: r?.submitted_at ? String(r.submitted_at) : '',
+      approvalStatus: String(r?.approval_status ?? 'pending')
+    }))
   };
 });
 
 define('submitWeek', async (req) => {
   const accountId = assertSelfOnly(req);
   const weekStart = validateLoggedAt(req?.payload?.weekStart);
+  const approverAccountId = validateAccountId(req?.payload?.approverAccountId, 'approverAccountId');
   const weekEnd = addDays(weekStart, 6);
 
-  const checkResult = await withSchema('submitWeek.check', () =>
-    sql
-      .prepare(`SELECT account_id FROM week_submissions WHERE account_id = ? AND week_start = ?`)
-      .bindParams(accountId, weekStart)
-      .execute()
-  );
+  if (String(approverAccountId) === String(accountId)) {
+    throw new Error('Không thể chọn chính mình làm người duyệt.');
+  }
 
-  if ((Array.isArray(checkResult?.rows) ? checkResult.rows : []).length > 0) {
-    return { success: true, alreadySubmitted: true, weekStart, weekEnd, submittedCount: 0 };
+  const existing = await loadWeekSubmission(accountId, weekStart);
+  if (existing) {
+    if (existing.approvalStatus === 'pending') {
+      return {
+        success: true,
+        alreadySubmitted: true,
+        weekStart,
+        weekEnd,
+        submittedCount: 0,
+        approvalStatus: 'pending'
+      };
+    }
+    if (existing.approvalStatus === 'approved') {
+      throw new Error('Tuần này đã được duyệt — không thể nộp lại.');
+    }
+    if (existing.approvalStatus !== 'rejected') {
+      throw new Error('Trạng thái nộp tuần không hợp lệ.');
+    }
   }
 
   const countResult = await withSchema('submitWeek.count', () =>
@@ -507,20 +626,108 @@ define('submitWeek', async (req) => {
       .execute()
   );
 
-  await withSchema('submitWeek.insert', () =>
+  if (existing?.approvalStatus === 'rejected') {
+    await withSchema('submitWeek.resubmit', () =>
+      sql
+        .prepare(
+          `UPDATE week_submissions
+           SET approver_account_id = ?, approval_status = 'pending',
+               submitted_at = CURRENT_TIMESTAMP, reviewed_at = NULL, review_note = ''
+           WHERE account_id = ? AND week_start = ?`
+        )
+        .bindParams(approverAccountId, accountId, weekStart)
+        .execute()
+    );
+  } else {
+    await withSchema('submitWeek.insert', () =>
+      sql
+        .prepare(
+          `INSERT INTO week_submissions
+           (account_id, week_start, approver_account_id, approval_status)
+           VALUES (?, ?, ?, 'pending')`
+        )
+        .bindParams(accountId, weekStart, approverAccountId)
+        .execute()
+    );
+  }
+
+  return {
+    success: true,
+    alreadySubmitted: false,
+    weekStart,
+    weekEnd,
+    submittedCount: draftCount,
+    approvalStatus: 'pending',
+    approverAccountId
+  };
+});
+
+define('reviewWeek', async (req) => {
+  const approverAccountId = requireAccountId(req);
+  const submitterAccountId = validateAccountId(req?.payload?.submitterAccountId, 'submitterAccountId');
+  const weekStart = validateLoggedAt(req?.payload?.weekStart);
+  const action = validateReviewAction(req?.payload?.action);
+  const reviewNote = validateNote(req?.payload?.reviewNote);
+  const weekEnd = addDays(weekStart, 6);
+
+  const submission = await loadWeekSubmission(submitterAccountId, weekStart);
+  if (!submission) {
+    throw new Error('Không tìm thấy timesheet đã nộp cho tuần này.');
+  }
+  if (String(submission.approverAccountId) !== String(approverAccountId)) {
+    throw new Error('Bạn không phải người duyệt của timesheet này.');
+  }
+  if (submission.approvalStatus !== 'pending') {
+    throw new Error(`Timesheet đã ở trạng thái "${submission.approvalStatus}" — không thể duyệt lại.`);
+  }
+
+  const nextStatus = action === 'approve' ? 'approved' : 'rejected';
+
+  await withSchema('reviewWeek.update', () =>
     sql
-      .prepare(`INSERT INTO week_submissions (account_id, week_start) VALUES (?, ?)`)
-      .bindParams(accountId, weekStart)
+      .prepare(
+        `UPDATE week_submissions
+         SET approval_status = ?, reviewed_at = CURRENT_TIMESTAMP, review_note = ?
+         WHERE account_id = ? AND week_start = ? AND approver_account_id = ?`
+      )
+      .bindParams(nextStatus, reviewNote, submitterAccountId, weekStart, approverAccountId)
       .execute()
   );
 
-  return { success: true, alreadySubmitted: false, weekStart, weekEnd, submittedCount: draftCount };
+  if (action === 'reject') {
+    await withSchema('reviewWeek.revertEntries', () =>
+      sql
+        .prepare(
+          `UPDATE time_entries SET status = 'draft'
+           WHERE account_id = ? AND logged_at >= ? AND logged_at <= ? AND status = 'submitted'`
+        )
+        .bindParams(submitterAccountId, weekStart, weekEnd)
+        .execute()
+    );
+  }
+
+  return {
+    success: true,
+    action,
+    approvalStatus: nextStatus,
+    submitterAccountId,
+    weekStart,
+    weekEnd,
+    reviewNote
+  };
 });
 
 define('exportTimesheetCsv', async (req) => {
-  const accountId = assertSelfOnly(req);
+  const viewerAccountId = requireAccountId(req);
   const weekStart = validateLoggedAt(req?.payload?.weekStart);
+  const targetAccountId = req?.payload?.targetAccountId
+    ? validateAccountId(req.payload.targetAccountId, 'targetAccountId')
+    : viewerAccountId;
   const weekEnd = addDays(weekStart, 6);
+
+  if (String(targetAccountId) !== String(viewerAccountId)) {
+    await assertCanViewTimesheet(viewerAccountId, targetAccountId, weekStart);
+  }
 
   const result = await withSchema('exportTimesheetCsv.sql', () =>
     sql
@@ -531,7 +738,7 @@ define('exportTimesheetCsv', async (req) => {
          ORDER BY logged_at ASC, issue_key ASC
          LIMIT ${EXPORT_ROW_LIMIT}`
       )
-      .bindParams(accountId, weekStart, weekEnd)
+      .bindParams(targetAccountId, weekStart, weekEnd)
       .execute()
   );
 
@@ -540,38 +747,58 @@ define('exportTimesheetCsv', async (req) => {
 
   const summaryMap = await fetchIssueSummaries([...new Set(rows.map((r) => r?.issue_key).filter(Boolean))]);
 
-  const header = 'Issue Key,Summary,Project,Work Type,Duration (h),Date,Note';
-  const lines = rows.map((r) => {
+  const headerCols = ['Issue Key', 'Summary', 'Project', 'Work Type', 'Duration (h)', 'Date', 'Note'];
+  const headerCsv = headerCols.join(',');
+  const headerTsv = headerCols.join('\t');
+
+  const toRow = (r) => {
     const key = String(r?.issue_key ?? '');
     const info = summaryMap[key] || {};
-    const summary = String(info.summary ?? '').replace(/"/g, '""');
-    const workType = String(info.workType || r?.category || '').replace(/"/g, '""');
-    const note = String(r?.note ?? '').replace(/"/g, '""');
+    const summary = String(info.summary ?? '');
+    const workType = String(info.workType || r?.category || '');
+    const note = String(r?.note ?? '');
     const hours = (Number(r?.duration_min ?? 0) / 60).toFixed(2);
-    return [
-      key,
-      `"${summary}"`,
-      String(r?.project_key ?? ''),
-      `"${workType}"`,
-      hours,
-      toDateStr(r?.logged_at),
-      `"${note}"`
-    ].join(',');
+    return { key, summary, project: String(r?.project_key ?? ''), workType, hours, date: toDateStr(r?.logged_at), note };
+  };
+
+  const csvLines = rows.map((r) => {
+    const d = toRow(r);
+    const esc = (s) => `"${String(s).replace(/"/g, '""')}"`;
+    return [d.key, esc(d.summary), d.project, esc(d.workType), d.hours, d.date, esc(d.note)].join(',');
   });
 
-  const csv = `\uFEFF${[header, ...lines].join('\r\n')}`;
+  const tsvLines = rows.map((r) => {
+    const d = toRow(r);
+    return [d.key, d.summary, d.project, d.workType, d.hours, d.date, d.note].join('\t');
+  });
+
+  const csv = `\uFEFF${[headerCsv, ...csvLines].join('\r\n')}`;
+  const tsv = `\uFEFF${[headerTsv, ...tsvLines].join('\r\n')}`;
   const totalMin = rows.reduce((s, r) => s + Number(r?.duration_min ?? 0), 0);
   const filename = `timesheet_${weekStart}_to_${weekEnd}.csv`;
 
   return {
     csv,
+    tsv,
     filename,
     totalMin,
     weekStart,
     weekEnd,
     rowCount: rows.length,
     truncated,
-    limit: EXPORT_ROW_LIMIT
+    limit: EXPORT_ROW_LIMIT,
+    previewRows: rows.slice(0, 20).map((r) => {
+      const d = toRow(r);
+      return {
+        issueKey: d.key,
+        summary: d.summary,
+        projectKey: d.project,
+        workType: d.workType,
+        hours: d.hours,
+        date: d.date,
+        note: d.note
+      };
+    })
   };
 });
 
