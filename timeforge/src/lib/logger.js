@@ -1,4 +1,4 @@
-export const createLogger = (module) => {
+const createLogger = (module) => {
   const write = (level, event, payload = {}) => {
     console.log(
       JSON.stringify({
@@ -37,3 +37,5 @@ export const createLogger = (module) => {
     }
   };
 };
+
+module.exports = { createLogger };

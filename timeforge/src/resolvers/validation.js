@@ -1,21 +1,16 @@
-export const ISSUE_KEY_REGEX = /^[A-Z]+-\d+$/;
-/** @deprecated dùng work type từ Jira; giữ để tương thích test cũ */
-export const VALID_CATEGORIES = ['dev', 'review', 'meeting', 'ops'];
-export const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-export const EXPORT_ROW_LIMIT = 500;
-export const WORK_TYPE_MAX = 64;
+const ISSUE_KEY_REGEX = /^[A-Z]+-\d+$/;
+const VALID_CATEGORIES = ['dev', 'review', 'meeting', 'ops'];
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const EXPORT_ROW_LIMIT = 500;
+const WORK_TYPE_MAX = 64;
 
-export const requireAccountId = (req) => {
+const requireAccountId = (req) => {
   const accountId = req?.context?.accountId;
   if (!accountId) throw new Error('Không xác định được accountId.');
   return accountId;
 };
 
-/**
- * User chỉ thao tác với chính mình.
- * Không tin payload.accountId — chặn giả mạo.
- */
-export const assertSelfOnly = (req) => {
+const assertSelfOnly = (req) => {
   const accountId = requireAccountId(req);
   const payloadAccountId = req?.payload?.accountId;
   if (payloadAccountId != null && String(payloadAccountId) !== String(accountId)) {
@@ -24,7 +19,7 @@ export const assertSelfOnly = (req) => {
   return accountId;
 };
 
-export const validateIssueKey = (raw) => {
+const validateIssueKey = (raw) => {
   const key = String(raw ?? '').trim();
   if (!key) throw new Error('issueKey là bắt buộc.');
   if (!ISSUE_KEY_REGEX.test(key)) {
@@ -35,8 +30,7 @@ export const validateIssueKey = (raw) => {
   return key;
 };
 
-/** Work type = Jira issue type name (Bug, Task, Story, …) */
-export const validateWorkType = (raw) => {
+const validateWorkType = (raw) => {
   const name = String(raw ?? '').trim();
   if (!name) throw new Error('work type (Loại) là bắt buộc.');
   if (name.length > WORK_TYPE_MAX) {
@@ -45,8 +39,7 @@ export const validateWorkType = (raw) => {
   return name;
 };
 
-/** Giữ alias — ưu tiên work type tự do; enum cũ vẫn pass */
-export const validateCategory = (raw) => {
+const validateCategory = (raw) => {
   const cat = String(raw ?? '').trim();
   if (!cat) throw new Error('category không hợp lệ: "".');
   const lower = cat.toLowerCase();
@@ -54,7 +47,7 @@ export const validateCategory = (raw) => {
   return validateWorkType(cat);
 };
 
-export const validateDurationMin = (raw) => {
+const validateDurationMin = (raw) => {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > 480) {
     throw new Error('duration_min phải là số nguyên từ 1 đến 480 (tối đa 8 giờ).');
@@ -62,7 +55,7 @@ export const validateDurationMin = (raw) => {
   return n;
 };
 
-export const validateLoggedAt = (raw) => {
+const validateLoggedAt = (raw) => {
   const date = String(raw ?? '').trim();
   if (!date) throw new Error('logged_at là bắt buộc.');
   if (!DATE_REGEX.test(date)) {
@@ -71,14 +64,31 @@ export const validateLoggedAt = (raw) => {
   return date;
 };
 
-export const validateNote = (raw) => {
+const validateNote = (raw) => {
   const note = String(raw ?? '').trim();
   if (note.length > 500) throw new Error('note không được vượt quá 500 ký tự.');
   return note;
 };
 
-export const validateEntryId = (raw) => {
+const validateEntryId = (raw) => {
   const id = Number(raw);
   if (!Number.isInteger(id) || id < 1) throw new Error('id entry không hợp lệ.');
   return id;
+};
+
+module.exports = {
+  ISSUE_KEY_REGEX,
+  VALID_CATEGORIES,
+  DATE_REGEX,
+  EXPORT_ROW_LIMIT,
+  WORK_TYPE_MAX,
+  requireAccountId,
+  assertSelfOnly,
+  validateIssueKey,
+  validateWorkType,
+  validateCategory,
+  validateDurationMin,
+  validateLoggedAt,
+  validateNote,
+  validateEntryId
 };

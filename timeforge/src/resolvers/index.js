@@ -1,9 +1,10 @@
-import Resolver from '@forge/resolver';
-import api, { route } from '@forge/api';
-import { sql, errorCodes } from '@forge/sql';
-import { createLogger } from '../lib/logger.js';
-import { applyMigrations } from '../sql/migration.js';
-import {
+const Resolver = require('@forge/resolver').default;
+const api = require('@forge/api');
+const { route } = require('@forge/api');
+const { sql, errorCodes } = require('@forge/sql');
+const { createLogger } = require('../lib/logger.js');
+const { applyMigrations } = require('../sql/migration.js');
+const {
   assertSelfOnly,
   validateIssueKey,
   validateDurationMin,
@@ -11,7 +12,7 @@ import {
   validateNote,
   validateEntryId,
   EXPORT_ROW_LIMIT
-} from './validation.js';
+} = require('./validation.js');
 
 const logger = createLogger('timeforge-resolver');
 
@@ -172,8 +173,8 @@ const insertEntry = async (label, { accountId, issueKey, durationMin, loggedAt, 
 
 const resolver = new Resolver();
 
-const define = (name, handler) => {
-  resolver.define(name, (req) => logger.run(name, resolverMeta(req), () => handler(req)));
+const define = (name, handlerFn) => {
+  resolver.define(name, (req) => logger.run(name, resolverMeta(req), () => handlerFn(req)));
 };
 
 define('getIssueMeta', async (req) => {
@@ -537,11 +538,8 @@ define('exportTimesheetCsv', async (req) => {
   const rows = Array.isArray(result?.rows) ? result.rows : [];
   const truncated = rows.length >= EXPORT_ROW_LIMIT;
 
-  // Lấy summary + work type cho từng issue key
   const summaryMap = await fetchIssueSummaries([...new Set(rows.map((r) => r?.issue_key).filter(Boolean))]);
 
-  // Header Excel-friendly: dùng tab-separated để paste thẳng vào Excel khỏi cần import wizard
-  // Nhưng CSV với BOM vẫn là chuẩn nhất — giữ comma, thêm cột Summary & Work Type
   const header = 'Issue Key,Summary,Project,Work Type,Duration (h),Date,Note';
   const lines = rows.map((r) => {
     const key = String(r?.issue_key ?? '');
@@ -561,7 +559,6 @@ define('exportTimesheetCsv', async (req) => {
     ].join(',');
   });
 
-  // UTF-8 BOM — Excel auto-detect tiếng Việt
   const csv = `\uFEFF${[header, ...lines].join('\r\n')}`;
   const totalMin = rows.reduce((s, r) => s + Number(r?.duration_min ?? 0), 0);
   const filename = `timesheet_${weekStart}_to_${weekEnd}.csv`;
@@ -578,4 +575,4 @@ define('exportTimesheetCsv', async (req) => {
   };
 });
 
-export const handler = resolver.getDefinitions();
+module.exports = { handler: resolver.getDefinitions() };

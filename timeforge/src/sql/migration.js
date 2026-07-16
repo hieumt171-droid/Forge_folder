@@ -1,4 +1,4 @@
-import { migrationRunner } from '@forge/sql';
+const { migrationRunner } = require('@forge/sql');
 
 const CREATE_TIME_ENTRIES = `
 CREATE TABLE IF NOT EXISTS time_entries (
@@ -34,11 +34,11 @@ const chain = migrationRunner
   .enqueue('v002_create_week_submissions', CREATE_WEEK_SUBMISSIONS)
   .enqueue('v003_category_work_type', ALTER_CATEGORY_TO_WORK_TYPE);
 
-export const applyMigrations = async () => {
+const applyMigrations = async () => {
   return chain.run();
 };
 
-export const runMigration = async () => {
+const runMigration = async () => {
   try {
     const applied = await applyMigrations();
     const list = await migrationRunner.list();
@@ -66,3 +66,5 @@ export const runMigration = async () => {
     throw e;
   }
 };
+
+module.exports = { applyMigrations, runMigration };

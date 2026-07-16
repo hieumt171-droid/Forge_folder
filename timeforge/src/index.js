@@ -1,2 +1,4 @@
-export { handler } from './resolvers/index.js';
-export { runMigration } from './sql/migration.js';
+const { handler } = require('./resolvers/index.js');
+const { runMigration } = require('./sql/migration.js');
+
+module.exports = { handler, runMigration };
