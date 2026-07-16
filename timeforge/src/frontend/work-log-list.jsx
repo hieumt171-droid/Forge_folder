@@ -13,7 +13,7 @@ import ForgeReconciler, {
   User,
   useProductContext
 } from '@forge/react';
-import { invoke } from '@forge/bridge';
+import { invoke, showFlag } from '@forge/bridge';
 
 const fmtMin = (m) => {
   if (!m) return '—';
@@ -22,6 +22,17 @@ const fmtMin = (m) => {
   if (h > 0 && min > 0) return `${h}h ${min}m`;
   if (h > 0) return `${h}h`;
   return `${min}m`;
+};
+
+const toast = (type, title, description) => {
+  showFlag({
+    id: `timeforge-activity-${type}-${Date.now()}`,
+    title,
+    description,
+    type,
+    appearance: type,
+    isAutoDismiss: true
+  });
 };
 
 const statusAppearance = (category) => {
@@ -56,7 +67,9 @@ const App = () => {
       setIssueStatusCategory(data?.issueStatusCategory ?? '');
       setSummary(data?.summary ?? '');
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      toast('error', 'Không tải được work log', msg);
     } finally {
       setLoading(false);
     }

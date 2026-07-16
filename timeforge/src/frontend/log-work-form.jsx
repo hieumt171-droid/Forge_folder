@@ -13,7 +13,7 @@ import ForgeReconciler, {
   Textfield,
   useProductContext
 } from '@forge/react';
-import { invoke, view } from '@forge/bridge';
+import { invoke, showFlag, view } from '@forge/bridge';
 
 const DURATION_PRESETS = [15, 30, 60, 90, 120];
 
@@ -26,6 +26,17 @@ const fmtMin = (m) => {
   if (h > 0 && min > 0) return `${h}h ${min}m`;
   if (h > 0) return `${h}h`;
   return `${min}m`;
+};
+
+const toast = (type, title, description) => {
+  showFlag({
+    id: `timeforge-${type}-${Date.now()}`,
+    title,
+    description,
+    type,
+    appearance: type,
+    isAutoDismiss: true
+  });
 };
 
 const App = () => {
@@ -66,13 +77,20 @@ const App = () => {
         loggedAt,
         note
       });
+      toast(
+        'success',
+        'Work log đã lưu',
+        `${issueKey} · ${fmtMin(Number(durationMin) || 0)}${workType ? ` · ${workType}` : ''}`
+      );
       await view.close();
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      toast('error', 'Không lưu được work log', msg);
     } finally {
       setSaving(false);
     }
-  }, [issueKey, durationMin, loggedAt, note]);
+  }, [issueKey, durationMin, loggedAt, note, workType]);
 
   const onCancel = useCallback(() => {
     view.close();

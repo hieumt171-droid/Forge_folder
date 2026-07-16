@@ -20,7 +20,7 @@ import ForgeReconciler, {
   Textfield,
   useProductContext
 } from '@forge/react';
-import { invoke } from '@forge/bridge';
+import { invoke, showFlag } from '@forge/bridge';
 
 const DURATION_PRESETS = [15, 30, 60, 90, 120];
 
@@ -35,21 +35,15 @@ const fmtMin = (m) => {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const Feedback = ({ msg, type, onDismiss }) => {
-  if (!msg) return null;
-  return (
-    <SectionMessage
-      appearance={type === 'success' ? 'success' : 'error'}
-      title={type === 'success' ? 'Thành công' : 'Lỗi'}
-    >
-      <Stack space="space.100">
-        <Text>{msg}</Text>
-        <Button appearance="subtle" onClick={onDismiss}>
-          Đóng
-        </Button>
-      </Stack>
-    </SectionMessage>
-  );
+const toast = (type, title, description) => {
+  showFlag({
+    id: `timeforge-panel-${type}-${Date.now()}`,
+    title,
+    description,
+    type,
+    appearance: type,
+    isAutoDismiss: true
+  });
 };
 
 const DurationField = ({ id, value, onChange }) => (
@@ -83,11 +77,9 @@ const EntryForm = ({ issueKey, workType, initial, submitLabel, onSubmit, onCance
   const [loggedAt, setLoggedAt] = useState(initial?.loggedAt ?? today());
   const [note, setNote] = useState(initial?.note ?? '');
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState(null);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setFeedback(null);
     try {
       await onSubmit({
         issueKey,
@@ -95,17 +87,18 @@ const EntryForm = ({ issueKey, workType, initial, submitLabel, onSubmit, onCance
         loggedAt,
         note
       });
-      setFeedback({
-        type: 'success',
-        msg: `Đã lưu ${fmtMin(Number(durationMin) || 0)} · ${workType || 'work type'}.`
-      });
+      toast(
+        'success',
+        initial ? 'Đã cập nhật work log' : 'Work log đã lưu',
+        `${issueKey} · ${fmtMin(Number(durationMin) || 0)}${workType ? ` · ${workType}` : ''}`
+      );
       if (!initial) {
         setDurationMin('60');
         setNote('');
         setLoggedAt(today());
       }
     } catch (e) {
-      setFeedback({ type: 'error', msg: e?.message || String(e) });
+      toast('error', 'Không lưu được work log', e?.message || String(e));
     } finally {
       setSaving(false);
     }
@@ -113,12 +106,6 @@ const EntryForm = ({ issueKey, workType, initial, submitLabel, onSubmit, onCance
 
   return (
     <Stack space="space.200">
-      <Feedback
-        msg={feedback?.msg}
-        type={feedback?.type}
-        onDismiss={() => setFeedback(null)}
-      />
-
       <Inline space="space.100" alignBlock="center" shouldWrap>
         <Text>Loại (work type):</Text>
         <Lozenge appearance="new">{workType || '…'}</Lozenge>
@@ -180,7 +167,6 @@ const IssueLogsList = ({ issueKey, workType, refreshToken }) => {
   const [issueStatus, setIssueStatus] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [feedback, setFeedback] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,7 +177,9 @@ const IssueLogsList = ({ issueKey, workType, refreshToken }) => {
       setTotalMin(data?.totalMin ?? 0);
       setIssueStatus(data?.issueStatus ?? '');
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      toast('error', 'Không tải được lịch sử', msg);
     } finally {
       setLoading(false);
     }
@@ -204,14 +192,13 @@ const IssueLogsList = ({ issueKey, workType, refreshToken }) => {
   const onDelete = useCallback(
     async (id) => {
       setBusyId(id);
-      setFeedback(null);
       try {
         await invoke('deleteTimeEntry', { id });
-        setFeedback({ type: 'success', msg: 'Đã xóa entry.' });
+        toast('success', 'Đã xóa work log', `Entry #${id}`);
         if (editing?.id === id) setEditing(null);
         await load();
       } catch (e) {
-        setFeedback({ type: 'error', msg: e?.message || String(e) });
+        toast('error', 'Không xóa được', e?.message || String(e));
       } finally {
         setBusyId(null);
       }
@@ -223,7 +210,6 @@ const IssueLogsList = ({ issueKey, workType, refreshToken }) => {
     async (payload) => {
       await invoke('updateTimeEntry', { id: editing.id, ...payload });
       setEditing(null);
-      setFeedback({ type: 'success', msg: 'Đã cập nhật entry.' });
       await load();
     },
     [editing, load]
@@ -318,11 +304,6 @@ const IssueLogsList = ({ issueKey, workType, refreshToken }) => {
 
   return (
     <Stack space="space.200">
-      <Feedback
-        msg={feedback?.msg}
-        type={feedback?.type}
-        onDismiss={() => setFeedback(null)}
-      />
       <Inline space="space.100" alignBlock="center" spread="space-between">
         <Inline space="space.100" alignBlock="center">
           <Text>Tổng trên issue:</Text>
