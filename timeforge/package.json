@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "private": true,
+  "type": "module",
   "scripts": {
     "lint": "eslint src --ext .js,.jsx --max-warnings 0",
     "test": "jest --config jest.config.cjs",
