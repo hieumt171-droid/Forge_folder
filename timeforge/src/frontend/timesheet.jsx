@@ -144,10 +144,18 @@ const tableInner = xcss({
 });
 
 const headerRow = xcss({
-  backgroundColor: 'color.background.neutral.bold',
+  backgroundColor: 'color.background.neutral',
   paddingBlock: 'space.150',
   paddingInline: 'space.100',
-  gap: 'space.0'
+  gap: 'space.0',
+  borderBottomWidth: 'border.width',
+  borderBottomStyle: 'solid',
+  borderBottomColor: 'color.border'
+});
+
+/** Chữ header — Forge Text không kế thừa màu từ Box tối nên dùng nền sáng + chữ đậm */
+const headerLabel = xcss({
+  color: 'color.text'
 });
 
 const rowEven = xcss({
