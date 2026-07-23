@@ -43,12 +43,18 @@ const BACKFILL_LEGACY_SUBMISSIONS = `
 UPDATE week_submissions SET approval_status = 'approved' WHERE approver_account_id IS NULL
 `;
 
+/** One-shot: xóa toàn bộ data để reset môi trường demo */
+const CLEAR_ALL_TIME_ENTRIES = `DELETE FROM time_entries`;
+const CLEAR_ALL_WEEK_SUBMISSIONS = `DELETE FROM week_submissions`;
+
 const chain = migrationRunner
   .enqueue('v001_create_time_entries', CREATE_TIME_ENTRIES)
   .enqueue('v002_create_week_submissions', CREATE_WEEK_SUBMISSIONS)
   .enqueue('v003_category_work_type', ALTER_CATEGORY_TO_WORK_TYPE)
   .enqueue('v004_week_submissions_approval', ALTER_WEEK_SUBMISSIONS_APPROVAL)
-  .enqueue('v005_backfill_legacy_submissions', BACKFILL_LEGACY_SUBMISSIONS);
+  .enqueue('v005_backfill_legacy_submissions', BACKFILL_LEGACY_SUBMISSIONS)
+  .enqueue('v006_clear_all_time_entries', CLEAR_ALL_TIME_ENTRIES)
+  .enqueue('v007_clear_all_week_submissions', CLEAR_ALL_WEEK_SUBMISSIONS);
 
 const applyMigrations = async () => {
   return chain.run();
