@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import ForgeReconciler, {
+  Box,
   Button,
-  DynamicTable,
   EmptyState,
   Heading,
   Inline,
   Label,
   LoadingButton,
   Lozenge,
-  SectionMessage,
   Spinner,
   Stack,
   Tab,
@@ -18,9 +17,10 @@ import ForgeReconciler, {
   Text,
   Textfield,
   User,
-  UserPicker
+  UserPicker,
+  xcss
 } from '@forge/react';
-import { invoke } from '@forge/bridge';
+import { invoke, showFlag } from '@forge/bridge';
 
 const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -93,7 +93,18 @@ const approvalLabel = (status) => {
   return 'Chưa nộp';
 };
 
-/** Tải file .xlsx từ base64 — UI Kit 2 hỗ trợ Blob + createElement */
+/** Toast kiểu Jira Flag — tự ẩn */
+const toast = (type, title, description) => {
+  showFlag({
+    id: `timeforge-ts-${type}-${Date.now()}`,
+    title,
+    description,
+    type,
+    appearance: type,
+    isAutoDismiss: true
+  });
+};
+
 const downloadXlsx = (base64, filename) => {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -113,22 +124,76 @@ const downloadXlsx = (base64, filename) => {
   URL.revokeObjectURL(url);
 };
 
-const Feedback = ({ msg, type, onDismiss }) => {
-  if (!msg) return null;
-  return (
-    <SectionMessage
-      appearance={type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'error'}
-      title={type === 'success' ? 'Thành công' : type === 'warning' ? 'Lưu ý' : 'Lỗi'}
-    >
-      <Stack space="space.100">
-        <Text>{msg}</Text>
-        <Button appearance="subtle" onClick={onDismiss}>
-          Đóng
-        </Button>
-      </Stack>
-    </SectionMessage>
-  );
-};
+/* ——— Table styles (Clean UI via design tokens) ——— */
+const tableShell = xcss({
+  borderWidth: 'border.width',
+  borderStyle: 'solid',
+  borderColor: 'color.border',
+  borderRadius: 'radius.medium',
+  overflow: 'hidden',
+  backgroundColor: 'elevation.surface'
+});
+
+const tableScroll = xcss({
+  width: '100%',
+  overflowX: 'auto'
+});
+
+const tableInner = xcss({
+  minWidth: '920px'
+});
+
+const headerRow = xcss({
+  backgroundColor: 'color.background.neutral.bold',
+  paddingBlock: 'space.150',
+  paddingInline: 'space.100',
+  gap: 'space.0'
+});
+
+const rowEven = xcss({
+  backgroundColor: 'elevation.surface',
+  paddingBlock: 'space.150',
+  paddingInline: 'space.100',
+  borderTopWidth: 'border.width',
+  borderTopStyle: 'solid',
+  borderTopColor: 'color.border',
+  ':hover': {
+    backgroundColor: 'elevation.surface.hovered'
+  }
+});
+
+const rowOdd = xcss({
+  backgroundColor: 'color.background.neutral.subtle',
+  paddingBlock: 'space.150',
+  paddingInline: 'space.100',
+  borderTopWidth: 'border.width',
+  borderTopStyle: 'solid',
+  borderTopColor: 'color.border',
+  ':hover': {
+    backgroundColor: 'color.background.neutral.subtle.hovered'
+  }
+});
+
+const totalRowStyle = xcss({
+  backgroundColor: 'color.background.neutral',
+  paddingBlock: 'space.150',
+  paddingInline: 'space.100',
+  borderTopWidth: 'border.width',
+  borderTopStyle: 'solid',
+  borderTopColor: 'color.border'
+});
+
+const colWork = xcss({ width: '200px', paddingInline: 'space.150', flexShrink: '0' });
+const colKey = xcss({ width: '88px', paddingInline: 'space.150', flexShrink: '0' });
+const colType = xcss({ width: '96px', paddingInline: 'space.150', flexShrink: '0' });
+const colLogged = xcss({ width: '72px', paddingInline: 'space.150', flexShrink: '0' });
+const colDay = xcss({ width: '64px', paddingInline: 'space.100', flexShrink: '0' });
+
+const reviewTableInner = xcss({ minWidth: '680px' });
+const reviewColUser = xcss({ width: '200px', paddingInline: 'space.150', flexShrink: '0' });
+const reviewColWeek = xcss({ width: '160px', paddingInline: 'space.150', flexShrink: '0' });
+const reviewColWhen = xcss({ width: '160px', paddingInline: 'space.150', flexShrink: '0' });
+const reviewColAct = xcss({ width: '140px', paddingInline: 'space.150', flexShrink: '0' });
 
 const PeriodBar = ({ weekStart, onPrev, onNext, onThisWeek }) => {
   const weekEnd = addDays(weekStart, 6);
@@ -150,96 +215,166 @@ const PeriodBar = ({ weekStart, onPrev, onNext, onThisWeek }) => {
   );
 };
 
+/** Bảng timesheet: header tối, zebra, hover, scroll ngang */
 const TimesheetGrid = ({ weekStart, data }) => {
   const days = Array.from({ length: 7 }, (_, i) => dayMeta(addDays(weekStart, i)));
+  const rows = data?.rows ?? [];
 
-  const head = {
-    cells: [
-      { key: 'work', content: 'Work Item' },
-      { key: 'key', content: 'Key' },
-      { key: 'type', content: 'Loại' },
-      { key: 'logged', content: 'Logged' },
-      ...days.map((d) => ({
-        key: d.ymd,
-        content: (
-          <Stack space="space.0">
-            <Text weight={d.isToday ? 'bold' : 'medium'}>
-              {d.dayNum} {d.labelEn}
-            </Text>
-            <Text>{d.isWeekend ? '· weekend' : d.labelVi}</Text>
-          </Stack>
-        )
-      }))
-    ]
-  };
+  return (
+    <Box xcss={tableShell}>
+      <Box xcss={tableScroll}>
+        <Box xcss={tableInner}>
+          {/* Header */}
+          <Box xcss={headerRow}>
+            <Inline alignBlock="center" shouldWrap={false}>
+              <Box xcss={colWork}>
+                <Text weight="bold">WORK ITEM</Text>
+              </Box>
+              <Box xcss={colKey}>
+                <Text weight="bold">KEY</Text>
+              </Box>
+              <Box xcss={colType}>
+                <Text weight="bold">LOẠI</Text>
+              </Box>
+              <Box xcss={colLogged}>
+                <Text weight="bold">LOGGED</Text>
+              </Box>
+              {days.map((d) => (
+                <Box key={d.ymd} xcss={colDay}>
+                  <Stack space="space.0">
+                    <Text weight="bold">
+                      {d.dayNum} {d.labelEn}
+                    </Text>
+                    <Text>{d.isWeekend ? 'weekend' : d.labelVi}</Text>
+                  </Stack>
+                </Box>
+              ))}
+            </Inline>
+          </Box>
 
-  const dataRows = (data?.rows ?? []).map((r) => ({
-    key: r.issueKey,
-    cells: [
-      {
-        key: 'work',
-        content: (
-          <Text weight="medium">
-            {r.summary
-              ? r.summary.length > 56
-                ? `${r.summary.slice(0, 56)}…`
-                : r.summary
-              : '—'}
-          </Text>
-        )
-      },
-      { key: 'key', content: <Text>{r.issueKey}</Text> },
-      {
-        key: 'type',
-        content: r.workType ? (
-          <Lozenge appearance="new">{r.workType}</Lozenge>
-        ) : (
-          <Text>—</Text>
-        )
-      },
-      {
-        key: 'logged',
-        content: <Text weight="bold">{fmtHours(r.total) || '0'}</Text>
-      },
-      ...days.map((d) => {
-        const val = r.days?.[d.ymd] || 0;
-        const label = fmtHours(val);
-        return {
-          key: d.ymd,
-          content: (
-            <Text weight={val ? 'bold' : 'medium'}>
-              {label || (d.isWeekend ? '·' : '')}
-            </Text>
-          )
-        };
-      })
-    ]
-  }));
+          {/* Data rows — zebra striping */}
+          {rows.map((r, idx) => (
+            <Box key={r.issueKey} xcss={idx % 2 === 0 ? rowEven : rowOdd}>
+              <Inline alignBlock="center" shouldWrap={false}>
+                <Box xcss={colWork}>
+                  <Text weight="medium">
+                    {r.summary
+                      ? r.summary.length > 48
+                        ? `${r.summary.slice(0, 48)}…`
+                        : r.summary
+                      : '—'}
+                  </Text>
+                </Box>
+                <Box xcss={colKey}>
+                  <Text>{r.issueKey}</Text>
+                </Box>
+                <Box xcss={colType}>
+                  {r.workType ? (
+                    <Lozenge appearance="new">{r.workType}</Lozenge>
+                  ) : (
+                    <Text>—</Text>
+                  )}
+                </Box>
+                <Box xcss={colLogged}>
+                  <Text weight="bold">{fmtHours(r.total) || '0'}</Text>
+                </Box>
+                {days.map((d) => {
+                  const val = r.days?.[d.ymd] || 0;
+                  const label = fmtHours(val);
+                  return (
+                    <Box key={d.ymd} xcss={colDay}>
+                      <Text weight={val ? 'bold' : 'medium'}>
+                        {label || (d.isWeekend ? '·' : '')}
+                      </Text>
+                    </Box>
+                  );
+                })}
+              </Inline>
+            </Box>
+          ))}
 
-  const dayTotals = days.map((d) => {
-    const sum = (data?.rows ?? []).reduce((s, r) => s + (r.days?.[d.ymd] || 0), 0);
-    return {
-      key: d.ymd,
-      content: <Text weight="bold">{fmtHours(sum) || '0'}</Text>
-    };
-  });
-
-  const totalRow = {
-    key: '_total',
-    cells: [
-      { key: 'work', content: <Text weight="bold">Total</Text> },
-      { key: 'key', content: <Text /> },
-      { key: 'type', content: <Text /> },
-      {
-        key: 'logged',
-        content: <Text weight="bold">{fmtHours(data?.weekTotal ?? 0) || '0'}</Text>
-      },
-      ...dayTotals
-    ]
-  };
-
-  return <DynamicTable head={head} rows={[...dataRows, totalRow]} />;
+          {/* Total */}
+          <Box xcss={totalRowStyle}>
+            <Inline alignBlock="center" shouldWrap={false}>
+              <Box xcss={colWork}>
+                <Text weight="bold">Total</Text>
+              </Box>
+              <Box xcss={colKey}>
+                <Text />
+              </Box>
+              <Box xcss={colType}>
+                <Text />
+              </Box>
+              <Box xcss={colLogged}>
+                <Text weight="bold">{fmtHours(data?.weekTotal ?? 0) || '0'}</Text>
+              </Box>
+              {days.map((d) => {
+                const sum = rows.reduce((s, r) => s + (r.days?.[d.ymd] || 0), 0);
+                return (
+                  <Box key={d.ymd} xcss={colDay}>
+                    <Text weight="bold">{fmtHours(sum) || '0'}</Text>
+                  </Box>
+                );
+              })}
+            </Inline>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
 };
+
+const ReviewTable = ({ items, onSelect }) => (
+  <Box xcss={tableShell}>
+    <Box xcss={tableScroll}>
+      <Box xcss={reviewTableInner}>
+        <Box xcss={headerRow}>
+          <Inline alignBlock="center" shouldWrap={false}>
+            <Box xcss={reviewColUser}>
+              <Text weight="bold">NGƯỜI NỘP</Text>
+            </Box>
+            <Box xcss={reviewColWeek}>
+              <Text weight="bold">TUẦN</Text>
+            </Box>
+            <Box xcss={reviewColWhen}>
+              <Text weight="bold">NỘP LÚC</Text>
+            </Box>
+            <Box xcss={reviewColAct}>
+              <Text weight="bold" />
+            </Box>
+          </Inline>
+        </Box>
+        {items.map((item, idx) => (
+          <Box
+            key={`${item.submitterAccountId}-${item.weekStart}`}
+            xcss={idx % 2 === 0 ? rowEven : rowOdd}
+          >
+            <Inline alignBlock="center" shouldWrap={false}>
+              <Box xcss={reviewColUser}>
+                <User accountId={item.submitterAccountId} />
+              </Box>
+              <Box xcss={reviewColWeek}>
+                <Text>{fmtRange(item.weekStart, item.weekEnd)}</Text>
+              </Box>
+              <Box xcss={reviewColWhen}>
+                <Text>
+                  {item.submittedAt
+                    ? item.submittedAt.slice(0, 16).replace('T', ' ')
+                    : '—'}
+                </Text>
+              </Box>
+              <Box xcss={reviewColAct}>
+                <Button appearance="primary" onClick={() => onSelect(item)}>
+                  Xem & duyệt
+                </Button>
+              </Box>
+            </Inline>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  </Box>
+);
 
 const TimesheetView = ({
   weekStart,
@@ -254,7 +389,6 @@ const TimesheetView = ({
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
-  const [feedback, setFeedback] = useState(null);
   const [approver, setApprover] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
   const [showSubmitForm, setShowSubmitForm] = useState(false);
@@ -268,7 +402,9 @@ const TimesheetView = ({
       const result = await invoke('getTimesheet', payload);
       setData(result);
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      toast('error', 'Không tải được timesheet', msg);
     } finally {
       setLoading(false);
     }
@@ -280,28 +416,28 @@ const TimesheetView = ({
 
   const onSubmit = useCallback(async () => {
     if (!approver?.id) {
-      setFeedback({ type: 'error', msg: 'Chọn người duyệt trước khi nộp.' });
+      toast('error', 'Thiếu người duyệt', 'Chọn người duyệt trước khi nộp.');
       return;
     }
     setSubmitting(true);
-    setFeedback(null);
     try {
       const result = await invoke('submitWeek', {
         weekStart,
         approverAccountId: approver.id
       });
       if (result?.alreadySubmitted) {
-        setFeedback({ type: 'warning', msg: `Tuần ${weekStart} đang chờ duyệt.` });
+        toast('warning', 'Đã nộp trước đó', `Tuần ${weekStart} đang chờ duyệt.`);
       } else {
-        setFeedback({
-          type: 'success',
-          msg: `Đã nộp ${result?.submittedCount ?? 0} entries · chờ người duyệt xác nhận.`
-        });
+        toast(
+          'success',
+          'Đã nộp timesheet',
+          `Đã nộp ${result?.submittedCount ?? 0} entries · chờ người duyệt xác nhận.`
+        );
         setShowSubmitForm(false);
       }
       await load();
     } catch (e) {
-      setFeedback({ type: 'error', msg: e?.message || String(e) });
+      toast('error', 'Nộp thất bại', e?.message || String(e));
     } finally {
       setSubmitting(false);
     }
@@ -310,7 +446,6 @@ const TimesheetView = ({
   const onReview = useCallback(
     async (action) => {
       setReviewing(true);
-      setFeedback(null);
       try {
         await invoke('reviewWeek', {
           submitterAccountId: targetAccountId,
@@ -318,18 +453,18 @@ const TimesheetView = ({
           action,
           reviewNote
         });
-        setFeedback({
-          type: 'success',
-          msg:
-            action === 'approve'
-              ? 'Đã duyệt timesheet.'
-              : 'Đã từ chối — người nộp có thể sửa và nộp lại.'
-        });
+        toast(
+          'success',
+          action === 'approve' ? 'Đã duyệt' : 'Đã từ chối',
+          action === 'approve'
+            ? 'Timesheet đã được duyệt.'
+            : 'Người nộp có thể sửa và nộp lại.'
+        );
         setReviewNote('');
         await load();
         onReviewed?.();
       } catch (e) {
-        setFeedback({ type: 'error', msg: e?.message || String(e) });
+        toast('error', 'Duyệt thất bại', e?.message || String(e));
       } finally {
         setReviewing(false);
       }
@@ -339,7 +474,6 @@ const TimesheetView = ({
 
   const onExport = useCallback(async () => {
     setExporting(true);
-    setFeedback(null);
     try {
       const payload = { weekStart };
       if (targetAccountId) payload.targetAccountId = targetAccountId;
@@ -349,18 +483,20 @@ const TimesheetView = ({
       }
       downloadXlsx(result.base64, result.filename);
       if (result?.truncated) {
-        setFeedback({
-          type: 'warning',
-          msg: `Đã tải ${result.filename} (${result.rowCount} dòng, giới hạn ${result.limit}).`
-        });
+        toast(
+          'warning',
+          'Đã tải Excel',
+          `${result.filename} (${result.rowCount} dòng, giới hạn ${result.limit}).`
+        );
       } else {
-        setFeedback({
-          type: 'success',
-          msg: `Đã tải ${result.filename} · ${result?.rowCount ?? 0} dòng · ${fmtMin(result?.totalMin ?? 0)}.`
-        });
+        toast(
+          'success',
+          'Đã tải Excel',
+          `${result.filename} · ${result?.rowCount ?? 0} dòng · ${fmtMin(result?.totalMin ?? 0)}.`
+        );
       }
     } catch (e) {
-      setFeedback({ type: 'error', msg: e?.message || String(e) });
+      toast('error', 'Export thất bại', e?.message || String(e));
     } finally {
       setExporting(false);
     }
@@ -377,19 +513,11 @@ const TimesheetView = ({
 
   return (
     <Stack space="space.200">
-      <Feedback
-        msg={feedback?.msg}
-        type={feedback?.type}
-        onDismiss={() => setFeedback(null)}
-      />
-
       {loading && <Spinner label="Đang tải timesheet..." />}
 
       {!loading && error && (
         <Stack space="space.100">
-          <SectionMessage appearance="error" title="Lỗi">
-            <Text>{error}</Text>
-          </SectionMessage>
+          <Text>{error}</Text>
           <Button onClick={load}>Thử lại</Button>
         </Stack>
       )}
@@ -416,12 +544,17 @@ const TimesheetView = ({
                 <User accountId={data.approverAccountId} />
               </Inline>
             ) : null}
+            {isPending && !showReviewActions ? (
+              <Text>Đã nộp — không sửa được cho đến khi duyệt/từ chối.</Text>
+            ) : null}
+            {isApproved ? <Text>Timesheet tuần này đã được duyệt.</Text> : null}
           </Inline>
 
           {isRejected && data.reviewNote ? (
-            <SectionMessage appearance="warning" title="Lý do từ chối">
+            <Inline space="space.050" alignBlock="center" shouldWrap>
+              <Lozenge appearance="removed">Từ chối</Lozenge>
               <Text>{data.reviewNote}</Text>
-            </SectionMessage>
+            </Inline>
           ) : null}
 
           <Inline space="space.100" alignBlock="center" spread="space-between">
@@ -470,12 +603,10 @@ const TimesheetView = ({
 
           {canSubmit && showSubmitForm ? (
             <Stack space="space.150">
-              <SectionMessage appearance="information" title="Nộp để duyệt">
-                <Text>
-                  Chọn người duyệt (PM / team lead). Sau khi nộp, chỉ bạn và
-                  người duyệt mới xem được timesheet tuần này.
-                </Text>
-              </SectionMessage>
+              <Text>
+                Chọn người duyệt (PM / team lead). Sau khi nộp, chỉ bạn và người
+                duyệt mới xem được timesheet tuần này.
+              </Text>
               <UserPicker
                 name="approver"
                 label="Người duyệt"
@@ -499,26 +630,9 @@ const TimesheetView = ({
             </Stack>
           ) : null}
 
-          {isPending && !showReviewActions ? (
-            <SectionMessage appearance="information" title="Đang chờ duyệt">
-              <Text>
-                Timesheet đã nộp. Bạn không thể sửa entry cho đến khi được
-                duyệt hoặc bị từ chối.
-              </Text>
-            </SectionMessage>
-          ) : null}
-
-          {isApproved ? (
-            <SectionMessage appearance="success" title="Đã duyệt">
-              <Text>Timesheet tuần này đã được duyệt.</Text>
-            </SectionMessage>
-          ) : null}
-
           {showReviewActions && data.canReview ? (
             <Stack space="space.150">
-              <SectionMessage appearance="warning" title="Duyệt timesheet">
-                <Text>Xem kỹ bảng giờ bên trên trước khi duyệt hoặc từ chối.</Text>
-              </SectionMessage>
+              <Text>Xem kỹ bảng giờ bên trên trước khi duyệt hoặc từ chối.</Text>
               <Stack space="space.050">
                 <Label labelFor="review-note">Ghi chú (bắt buộc khi từ chối)</Label>
                 <Textfield
@@ -566,7 +680,9 @@ const ReviewTab = () => {
       const result = await invoke('getPendingApprovals', {});
       setItems(Array.isArray(result?.items) ? result.items : []);
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      toast('error', 'Không tải danh sách duyệt', msg);
     } finally {
       setLoading(false);
     }
@@ -611,11 +727,7 @@ const ReviewTab = () => {
       </Inline>
 
       {loading && <Spinner label="Đang tải..." />}
-      {!loading && error && (
-        <SectionMessage appearance="error" title="Lỗi">
-          <Text>{error}</Text>
-        </SectionMessage>
-      )}
+      {!loading && error && <Text>{error}</Text>}
       {!loading && !error && items.length === 0 && (
         <EmptyState
           header="Không có timesheet chờ duyệt"
@@ -623,47 +735,7 @@ const ReviewTab = () => {
         />
       )}
       {!loading && !error && items.length > 0 && (
-        <DynamicTable
-          head={{
-            cells: [
-              { key: 'user', content: 'Người nộp' },
-              { key: 'week', content: 'Tuần' },
-              { key: 'submitted', content: 'Nộp lúc' },
-              { key: 'act', content: '' }
-            ]
-          }}
-          rows={items.map((item) => ({
-            key: `${item.submitterAccountId}-${item.weekStart}`,
-            cells: [
-              {
-                key: 'user',
-                content: <User accountId={item.submitterAccountId} />
-              },
-              {
-                key: 'week',
-                content: <Text>{fmtRange(item.weekStart, item.weekEnd)}</Text>
-              },
-              {
-                key: 'submitted',
-                content: (
-                  <Text>
-                    {item.submittedAt
-                      ? item.submittedAt.slice(0, 16).replace('T', ' ')
-                      : '—'}
-                  </Text>
-                )
-              },
-              {
-                key: 'act',
-                content: (
-                  <Button appearance="primary" onClick={() => setSelected(item)}>
-                    Xem & duyệt
-                  </Button>
-                )
-              }
-            ]
-          }))}
-        />
+        <ReviewTable items={items} onSelect={setSelected} />
       )}
     </Stack>
   );
